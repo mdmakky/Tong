@@ -1,0 +1,23 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "backend application for tong",
+  "keywords": [
+    "tong"
+  ],
+  "homepage": "https://github.com/mdmakky/Tong#readme",
+  "bugs": {
+    "url": "https://github.com/mdmakky/Tong/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mdmakky/Tong.git"
+  },
+  "license": "ISC",
+  "author": "tong-er-dokan",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
