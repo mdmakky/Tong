@@ -3,6 +3,18 @@ import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import env from './env.js';
 
+const shouldFailOnDbError = env.NODE_ENV === 'production';
+
+const handleDbConnectionError = (label, err) => {
+  console.error(`❌ ${label} connection error:`, err.message);
+
+  if (shouldFailOnDbError) {
+    process.exit(1);
+  }
+
+  console.warn(`⚠️  Continuing startup without ${label} (development mode)`);
+};
+
 // ─── Prisma (PostgreSQL) ───────────────────────
 export const prisma = new PrismaClient({
   log: env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
@@ -13,14 +25,32 @@ export const connectMongoDB = async () => {
   try {
     await mongoose.connect(env.MONGODB_URI);
     console.log('✅ MongoDB connected');
+    return true;
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
-    process.exit(1);
+    handleDbConnectionError('MongoDB', err);
+    return false;
   }
 };
 
 // ─── Redis ─────────────────────────────────────
 let redis = null;
+let redisFallbackAttempted = false;
+
+const buildRedisClient = (useTls) => {
+  const redisUrl = useTls ? env.REDIS_URL : env.REDIS_URL.replace(/^rediss:\/\//, 'redis://');
+
+  return new Redis(redisUrl, {
+    maxRetriesPerRequest: 3,
+    retryStrategy(times) {
+      if (times > 3) {
+        console.warn('⚠️  Redis retry limit reached — continuing without Redis');
+        return null; // stop retrying
+      }
+      return Math.min(times * 200, 2000);
+    },
+    tls: useTls ? { rejectUnauthorized: false } : undefined,
+  });
+};
 
 export const connectRedis = () => {
   if (!env.REDIS_URL) {
@@ -29,20 +59,29 @@ export const connectRedis = () => {
   }
 
   try {
-    redis = new Redis(env.REDIS_URL, {
-      maxRetriesPerRequest: 3,
-      retryStrategy(times) {
-        if (times > 3) {
-          console.warn('⚠️  Redis retry limit reached — continuing without Redis');
-          return null; // stop retrying
-        }
-        return Math.min(times * 200, 2000);
-      },
-      tls: env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
-    });
+    const startedWithTls = env.REDIS_URL.startsWith('rediss://');
+    redis = buildRedisClient(startedWithTls);
 
     redis.on('connect', () => console.log('✅ Redis connected'));
     redis.on('error', (err) => {
+      const isTlsVersionError = /wrong version number/i.test(err.message);
+
+      if (startedWithTls && isTlsVersionError && !redisFallbackAttempted) {
+        redisFallbackAttempted = true;
+        console.warn('⚠️  Redis TLS handshake failed — retrying without TLS');
+
+        if (redis) {
+          redis.disconnect();
+        }
+
+        redis = buildRedisClient(false);
+        redis.on('connect', () => console.log('✅ Redis connected (non-TLS fallback)'));
+        redis.on('error', (fallbackErr) => {
+          console.warn('⚠️  Redis error:', fallbackErr.message);
+        });
+        return;
+      }
+
       console.warn('⚠️  Redis error:', err.message);
     });
 
@@ -62,8 +101,7 @@ export const connectAllDatabases = async () => {
     await prisma.$connect();
     console.log('✅ PostgreSQL connected (Prisma)');
   } catch (err) {
-    console.error('❌ PostgreSQL connection error:', err.message);
-    process.exit(1);
+    handleDbConnectionError('PostgreSQL', err);
   }
 
   // MongoDB
