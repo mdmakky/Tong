@@ -1,0 +1,411 @@
+import { useState, useRef } from 'react'
+import clsx from 'clsx'
+import {
+  Check, CheckCheck, Clock, MoreHorizontal, Reply, Forward,
+  Pencil, Trash2, Pin, Smile, AlertCircle, FileText, Play,
+  Mic, Image as ImageIcon, MapPin
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+import Avatar from '@/components/ui/Avatar'
+import { formatMessageTime, getReactionSummary, hasReacted } from '@/utils/helpers'
+import useChatStore from '@/store/chatStore'
+import useAuthStore from '@/store/authStore'
+import { messageApi } from '@/lib/apiServices'
+import { getSocket } from '@/lib/socket'
+import ReactionPicker from './ReactionPicker'
+import ReplyPreview from './ReplyPreview'
+import MediaLightbox from '@/components/ui/MediaLightbox'
+
+export default function MessageItem({ message, isOwn, conversationId, previousMessage }) {
+  const [showActions, setShowActions] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const { setReplyTo, updateMessage, deleteMessage } = useChatStore()
+  const { user } = useAuthStore()
+  const socket = getSocket()
+
+  const msg = message
+  const isDeleted = msg.is_deleted_for_all
+
+  // Check if this is a system event message (e.g. "X added Y")
+  const isSystem = msg.message_type === 'system'
+
+  if (isSystem) {
+    return (
+      <div className="flex items-center justify-center py-2 px-6">
+        <span className="text-xs text-text-muted bg-bg-elevated px-3 py-1 rounded-full">
+          {msg.content?.text}
+        </span>
+      </div>
+    )
+  }
+
+  const showAvatar = !isOwn && (
+    !previousMessage ||
+    previousMessage.type === 'separator' ||
+    previousMessage.data?.sender_id !== msg.sender_id
+  )
+
+  const sender = msg.sender || (isOwn ? null : msg)
+
+  // Status icon
+  const StatusIcon = () => {
+    if (!isOwn) return null
+    const status = msg.status
+    if (status === 'pending') return <Clock className="w-3 h-3 text-text-muted" />
+    if (status === 'sent') return <Check className="w-3 h-3 text-text-muted" />
+    if (status === 'delivered') return <CheckCheck className="w-3 h-3 text-text-muted" />
+    if (status === 'read') return <CheckCheck className="w-3 h-3 text-accent-yellow" />
+    return <CheckCheck className="w-3 h-3 text-text-muted" />
+  }
+
+  const handleReact = async (emoji) => {
+    setShowEmojiPicker(false)
+    if (socket) {
+      socket.emit('react_message', { message_id: msg._id || msg.id, emoji, conversation_id: conversationId })
+    } else {
+      try {
+        const { data } = await messageApi.react(msg._id || msg.id, emoji)
+        // Update locally if socket not available
+      } catch (_) {}
+    }
+  }
+
+  const handleDelete = async (forAll) => {
+    try {
+      await messageApi.delete(msg._id || msg.id, forAll)
+      deleteMessage(conversationId, msg._id || msg.id)
+      toast.success(forAll ? 'Message deleted for everyone' : 'Message deleted')
+    } catch (_) {
+      toast.error('Failed to delete message')
+    }
+    setShowActions(false)
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content?.text || '')
+    toast.success('Copied')
+    setShowActions(false)
+  }
+
+  const reactionSummary = getReactionSummary(msg.reactions || [])
+
+  return (
+    <div
+      className={clsx(
+        'group flex items-end gap-2 px-4 py-0.5 message-appear relative',
+        isOwn ? 'flex-row-reverse' : 'flex-row'
+      )}
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => { setShowActions(false); setShowEmojiPicker(false) }}
+    >
+      {/* Avatar (only for received messages, first in a group) */}
+      <div className="w-8 flex-shrink-0">
+        {showAvatar && !isOwn && (
+          <Avatar
+            src={sender?.avatar_url}
+            name={sender?.display_name}
+            size="sm"
+          />
+        )}
+      </div>
+
+      {/* Message content */}
+      <div className={clsx('max-w-[70%] flex flex-col', isOwn ? 'items-end' : 'items-start')}>
+        {/* Sender name for group chats */}
+        {showAvatar && !isOwn && sender?.display_name && (
+          <span className="text-xs font-medium text-accent-yellow mb-1 ml-1">
+            {sender.display_name}
+          </span>
+        )}
+
+        {/* Reply preview */}
+        {msg.reply_to && <ReplyPreview messageId={msg.reply_to} isOwn={isOwn} conversationId={conversationId} />}
+
+        {/* Bubble */}
+        <div
+          className={clsx(
+            'relative',
+            isOwn ? 'message-bubble-sent' : 'message-bubble-received',
+            isDeleted && 'opacity-60 italic'
+          )}
+        >
+          {isDeleted ? (
+            <span className="flex items-center gap-1.5 text-sm">
+              <AlertCircle className="w-3.5 h-3.5" />
+              This message was deleted
+            </span>
+          ) : (
+            <MessageContent message={msg} onImageClick={() => setLightboxOpen(true)} />
+          )}
+
+          {/* Edited label */}
+          {msg.edited_at && !isDeleted && (
+            <span className="text-[10px] opacity-60 ml-1">(edited)</span>
+          )}
+        </div>
+
+        {/* Time + status row */}
+        <div className={clsx('flex items-center gap-1 mt-0.5 px-1', isOwn ? 'flex-row-reverse' : '')}>
+          <span className="text-[11px] text-text-muted">{formatMessageTime(msg.created_at)}</span>
+          <StatusIcon />
+        </div>
+
+        {/* Reactions */}
+        {reactionSummary.length > 0 && (
+          <div className={clsx('flex items-center gap-1 mt-1 flex-wrap', isOwn ? 'justify-end' : 'justify-start')}>
+            {reactionSummary.map(([emoji, count]) => (
+              <button
+                key={emoji}
+                onClick={() => handleReact(emoji)}
+                className={clsx(
+                  'flex items-center gap-1 text-sm bg-bg-elevated border rounded-full px-2 py-0.5 transition-all reaction-btn',
+                  hasReacted(msg.reactions, user?.id, emoji)
+                    ? 'border-accent-yellow/50 bg-accent-yellow/10'
+                    : 'border-border hover:border-border-subtle'
+                )}
+              >
+                <span>{emoji}</span>
+                <span className="text-[11px] text-text-secondary">{count}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Action buttons (appear on hover) */}
+      {showActions && !isDeleted && (
+        <div
+          className={clsx(
+            'flex items-center gap-1 self-center animate-fade-in',
+            isOwn ? 'flex-row-reverse mr-2' : 'ml-2'
+          )}
+        >
+          {/* Emoji react */}
+          <div className="relative">
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="icon-btn"
+              title="React"
+            >
+              <Smile className="w-4 h-4" />
+            </button>
+            {showEmojiPicker && (
+              <div className={clsx('absolute bottom-10 z-50', isOwn ? 'right-0' : 'left-0')}>
+                <ReactionPicker onSelect={handleReact} />
+              </div>
+            )}
+          </div>
+
+          {/* Reply */}
+          <button
+            onClick={() => setReplyTo(msg)}
+            className="icon-btn"
+            title="Reply"
+          >
+            <Reply className="w-4 h-4" />
+          </button>
+
+          {/* More actions */}
+          <MessageActionsMenu
+            isOwn={isOwn}
+            onCopy={handleCopy}
+            onDelete={handleDelete}
+            onEdit={isOwn ? () => {} : undefined}
+          />
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <MediaLightbox
+          url={msg.content?.media_url}
+          type={msg.message_type}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Message content renderer ─────────────────────────────────────────────────
+function MessageContent({ message, onImageClick }) {
+  const { message_type: type, content } = message
+
+  if (type === 'image') {
+    return (
+      <div>
+        <img
+          src={content?.media_url}
+          alt="Image"
+          className="max-w-full rounded-xl cursor-pointer hover:opacity-90 transition-opacity max-h-80 object-cover"
+          onClick={onImageClick}
+          loading="lazy"
+        />
+        {content?.text && <p className="text-sm mt-2">{content.text}</p>}
+      </div>
+    )
+  }
+
+  if (type === 'video') {
+    return (
+      <div className="relative cursor-pointer" onClick={onImageClick}>
+        {content?.thumbnail_url ? (
+          <img src={content.thumbnail_url} className="max-w-full rounded-xl max-h-64 object-cover" />
+        ) : (
+          <div className="w-64 h-36 bg-bg-primary rounded-xl flex items-center justify-center">
+            <Play className="w-12 h-12 text-text-muted" />
+          </div>
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-xl">
+          <Play className="w-10 h-10 text-white" />
+        </div>
+        {content?.duration && (
+          <span className="absolute bottom-2 right-2 text-xs text-white bg-black/60 px-1.5 py-0.5 rounded">
+            {formatDuration(content.duration)}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  if (type === 'audio') {
+    return (
+      <div className="flex items-center gap-3 min-w-[180px]">
+        <Mic className="w-5 h-5 text-text-secondary flex-shrink-0" />
+        <div className="flex-1">
+          <div className="flex items-center gap-1 mb-1">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <div
+                key={i}
+                className="w-1 rounded-full bg-current opacity-60"
+                style={{ height: `${4 + Math.sin(i) * 8 + Math.random() * 6}px` }}
+              />
+            ))}
+          </div>
+          <span className="text-[11px] opacity-60">{formatDuration(content?.duration || 0)}</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (type === 'file') {
+    return (
+      <a
+        href={content?.media_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-[180px]"
+      >
+        <div className="w-10 h-10 bg-bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
+          <FileText className="w-5 h-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-medium truncate max-w-[180px]">{content?.file_name || 'File'}</p>
+          <p className="text-[11px] opacity-60">
+            {content?.media_size ? formatFileSize(content.media_size) : ''}
+          </p>
+        </div>
+      </a>
+    )
+  }
+
+  if (type === 'location') {
+    return (
+      <div className="flex items-center gap-2">
+        <MapPin className="w-5 h-5 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-medium">{content?.location?.name || 'Location'}</p>
+          <p className="text-[11px] opacity-60">Tap to view on map</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Default: text
+  return (
+    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+      {content?.text || message.text}
+    </p>
+  )
+}
+
+// ─── Reaction quick-pick row ──────────────────────────────────────────────────
+function QuickReactions({ onSelect }) {
+  const QUICK = ['👍', '❤️', '😂', '😮', '😢', '😡']
+  return (
+    <div className="flex items-center gap-1 bg-bg-elevated border border-border rounded-2xl px-2 py-1.5 shadow-xl">
+      {QUICK.map((e) => (
+        <button
+          key={e}
+          onClick={() => onSelect(e)}
+          className="text-xl hover:scale-125 transition-transform duration-150"
+        >
+          {e}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Message actions menu ─────────────────────────────────────────────────────
+function MessageActionsMenu({ isOwn, onCopy, onDelete, onEdit }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="icon-btn"
+        title="More"
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </button>
+
+      {open && (
+        <div className="absolute bottom-8 right-0 z-50 bg-bg-elevated border border-border rounded-xl shadow-2xl py-1 min-w-[160px] animate-scale-in">
+          <button
+            onClick={() => { onCopy(); setOpen(false) }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+          >
+            Copy text
+          </button>
+          {isOwn && onEdit && (
+            <button
+              onClick={() => { onEdit(); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+          )}
+          <button
+            onClick={() => { onDelete(false); setOpen(false) }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-busy hover:bg-surface-hover transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Delete for me
+          </button>
+          {isOwn && (
+            <button
+              onClick={() => { onDelete(true); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-busy hover:bg-surface-hover transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete for everyone
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function formatDuration(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}

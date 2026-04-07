@@ -1,0 +1,1217 @@
+﻿ChatFlow — Software Requirements SpecificationPhase 1: Complete Messaging System
+💬
+tong
+Software Requirements Specification (SRS)
+Phase 1 — Complete Messaging System
+বিবরণ
+	তথ্য
+	প্রজেক্টের নাম
+	tong — Messaging Platform
+
+
+	ডকুমেন্টের ধরন
+	Software Requirements Specification (SRS)
+	ভার্সন
+	v1.0.0
+	তারিখ
+	৬ এপ্রিল, ২০২৬
+	টেক স্ট্যাক
+	React.js + Node.js / Express.js
+	ফেজ
+	Phase 1 of 5
+	স্ট্যাটাস
+	Draft — Review Pending
+	
+
+
+
+বিষয়সূচি (Table of Contents)
+
+
+
+
+
+
+
+
+১. প্রজেক্ট ওভারভিউ
+১.১ প্রজেক্টের পরিচয়
+tong একটি ফুল-ফিচার্ড রিয়েল-টাইম মেসেজিং প্ল্যাটফর্ম যা React.js ও Node.js/Express.js দিয়ে তৈরি হবে। প্রজেক্টটি মোট ৫টি ফেজে সম্পন্ন করার পরিকল্পনা রয়েছে। প্রথম ফেজে সম্পূর্ণ মেসেজিং সিস্টেম তৈরি করা হবে যা পরবর্তী সকল ফেজের ভিত্তি হিসেবে কাজ করবে।
+
+
+১.২ ৫-ফেজ রোডম্যাপ
+ফেজ
+	বিষয়বস্তু
+	স্ট্যাটাস
+	Phase 1
+	Complete Messaging System (One-to-One, Group, Private Chat)
+	🟢 বর্তমান ফেজ
+	Phase 2
+	Audio Calling Feature (WebRTC-based)
+	⏳ পরিকল্পিত
+	Phase 3
+	Video Calling Feature (WebRTC + MediaServer)
+	⏳ পরিকল্পিত
+	Phase 4
+	Anonymous Chat + Anonymous Video Chat (Omegle-style)
+	⏳ পরিকল্পিত
+	Phase 5
+	Mobile Application (React Native)
+	⏳ পরিকল্পিত
+	
+
+১.৩ Phase 1 - এর লক্ষ্য
+* রিয়েল-টাইম One-to-One চ্যাট সিস্টেম তৈরি করা
+* গ্রুপ চ্যাট ফিচার সম্পূর্ণ করা
+* প্রাইভেট/এনক্রিপ্টেড চ্যাটের সুবিধা রাখা
+* শক্তিশালী ইউজার অথেন্টিকেশন ও প্রোফাইল সিস্টেম তৈরি করা
+* ফাইল, মিডিয়া শেয়ারিং সিস্টেম যুক্ত করা
+* ভবিষ্যৎ ফেজের জন্য স্কেলেবল আর্কিটেকচার নিশ্চিত করা
+
+
+১.৪ সম্পূর্ণ ফ্রি হোস্টিং স্ট্যাক (খরচ = ০ টাকা)
+tong Phase 1 সম্পূর্ণ বিনামূল্যে চালানো যাবে। নিচের সার্ভিসগুলো একসাথে ব্যবহার করলে কোনো খরচ নেই:
+
+
+সার্ভিস
+	প্ল্যাটফর্ম
+	ফ্রি লিমিট
+	ব্যবহার
+	PostgreSQL (DB)
+	Supabase — DB Only ✅
+	500MB, Unlimited req
+	Users, Groups, Auth
+	MongoDB
+	MongoDB Atlas
+	512MB Free
+	Messages, Media metadata
+	Redis
+	Upstash
+	10,000 req/day Free
+	Cache, Presence, OTP
+	File Storage
+	Cloudinary
+	25GB Free
+	Image, Video, Audio, File
+	Email (OTP)
+	Resend.com
+	3,000 email/month Free
+	OTP, Verification
+	Backend Hosting
+	Render.com
+	750 hrs/month Free
+	Node.js + Express
+	Frontend Hosting
+	Vercel
+	Unlimited Free
+	React App
+	Authentication
+	Manual — JWT + bcrypt ✅
+	নিজেই তৈরি
+	কোনো 3rd party নয়
+	
+
+⚠️ গুরুত্বপূর্ণ: Supabase শুধু PostgreSQL Database হিসেবে ব্যবহার হবে। Supabase Auth, Supabase Storage বা অন্য কোনো Supabase সার্ভিস ব্যবহার করা হবে না। সকল Authentication Manual JWT + bcrypt দিয়ে তৈরি।
+
+
+
+
+২. টেক স্ট্যাক ও আর্কিটেকচার
+২.১ ফ্রন্টএন্ড (React.js)
+লাইব্রেরি/টুল
+	উদ্দেশ্য
+	কারণ
+	React.js 18+
+	UI Framework
+	Component-based, Fast rendering
+	Redux Toolkit / Zustand
+	State Management
+	Chat state, user session, notifications
+	Socket.io-client
+	Real-time Communication
+	WebSocket সংযোগ
+	React Router v6
+	Routing
+	SPA navigation
+	Axios
+	HTTP Client
+	REST API calls
+	TailwindCSS
+	Styling
+	দ্রুত UI তৈরি, Mobile-ready
+	React Query (TanStack)
+	Server State
+	API caching & sync
+	date-fns
+	Date Formatting
+	Message timestamp
+	react-virtualized
+	Virtual List
+	হাজারো মেসেজ রেন্ডার অপ্টিমাইজেশন
+	Vite
+	Build Tool
+	দ্রুত development server
+	
+
+২.২ ব্যাকএন্ড (Node.js / Express.js)
+লাইব্রেরি/টুল
+	উদ্দেশ্য
+	কারণ
+	Node.js 20 LTS
+	Runtime
+	Non-blocking I/O, WebSocket support
+	Express.js
+	HTTP Framework
+	REST API তৈরি
+	Socket.io
+	WebSocket Server
+	Real-time messaging
+	Mongoose
+	ODM for MongoDB
+	Database interaction
+	Prisma
+	ORM for PostgreSQL
+	Type-safe DB queries, Auto-migration
+	JWT (jsonwebtoken)
+	Authentication
+	Stateless auth token
+	bcryptjs
+	Password Hashing
+	Secure password storage
+	Multer + Cloudinary
+	File Upload
+	Media ও ফাইল স্টোরেজ
+	Redis (ioredis)
+	Cache & Presence
+	Online status, session, rate limit
+	Resend SDK
+	Email Service
+	OTP email — 3K/month Free, সহজ API
+	express-validator
+	Input Validation
+	Request validation
+	helmet + cors
+	Security
+	HTTP security headers
+	morgan
+	Logging
+	HTTP request logs
+	PM2
+	Process Manager
+	Production deployment
+	
+
+২.৩ ডেটাবেজ আর্কিটেকচার (হাইব্রিড পদ্ধতি)
+tong একটি হাইব্রিড ডেটাবেজ কৌশল ব্যবহার করবে যেখানে তিন ধরনের ডেটাবেজ একসাথে কাজ করবে। প্রতিটি ডেটাবেজ তার নিজের শক্তির জায়গায় ব্যবহার হবে।
+
+
+ডেটাবেজ
+	ব্যবহার
+	কারণ
+	MongoDB (Primary)
+	Messages, Media, Chat History
+	Schema-flexible, লক্ষ লক্ষ মেসেজ দ্রুত query
+	PostgreSQL (Secondary)
+	Users, Groups, Relationships
+	ACID compliance, Complex joins
+	Redis (Cache)
+	Online status, Sessions, Rate Limiting
+	In-memory, Ultra-fast lookup
+	
+
+📌 সহজ শুরুর জন্য শুধু MongoDB দিয়েও শুরু করা যাবে এবং পরে PostgreSQL যোগ করা যাবে।
+
+
+২.৪ সিস্টেম আর্কিটেকচার ডায়াগ্রাম
+System Architecture — tong
+
+
+	Client (React.js)  →  Nginx Reverse Proxy  →  Express.js API Server
+	                                          →  Socket.io Server
+	Express.js  →  MongoDB (Messages, Media)
+	            →  PostgreSQL (Users, Groups, Auth)
+	            →  Redis (Cache, Presence, Sessions)
+	            →  Cloudinary (File/Image Storage)
+	            →  Email Service (Nodemailer/SendGrid)
+	
+
+
+
+৩. ডেটাবেজ স্কিমা ডিজাইন
+৩.১ PostgreSQL — Users Table
+Column
+	Type
+	Constraint
+	বিবরণ
+	id
+	UUID
+	PRIMARY KEY
+	ইউনিক ইউজার আইডি
+	username
+	VARCHAR(50)
+	UNIQUE, NOT NULL
+	লগইনের জন্য
+	email
+	VARCHAR(255)
+	UNIQUE, NOT NULL
+	ইমেইল
+	phone
+	VARCHAR(20)
+	UNIQUE, NULLABLE
+	ফোন নম্বর
+	password_hash
+	TEXT
+	NOT NULL
+	bcrypt হ্যাশ
+	display_name
+	VARCHAR(100)
+	NOT NULL
+	প্রোফাইলে নাম
+	avatar_url
+	TEXT
+	NULLABLE
+	প্রোফাইল ছবির URL
+	bio
+	VARCHAR(500)
+	NULLABLE
+	সংক্ষিপ্ত পরিচয়
+	status
+	ENUM
+	DEFAULT "active"
+	active/banned/deleted
+	is_verified
+	BOOLEAN
+	DEFAULT false
+	Email/phone verified?
+	last_seen
+	TIMESTAMPTZ
+	NULLABLE
+	সর্বশেষ অ্যাক্টিভ সময়
+	created_at
+	TIMESTAMPTZ
+	DEFAULT NOW()
+	অ্যাকাউন্ট তৈরির সময়
+	updated_at
+	TIMESTAMPTZ
+	AUTO UPDATE
+	সর্বশেষ আপডেট
+	two_factor_secret
+	TEXT
+	NULLABLE
+	2FA সিক্রেট কী
+	notification_token
+	TEXT
+	NULLABLE
+	Push notification token
+	theme_preference
+	VARCHAR(10)
+	DEFAULT "system"
+	light/dark/system
+	language
+	VARCHAR(10)
+	DEFAULT "bn"
+	UI ভাষা
+	timezone
+	VARCHAR(50)
+	DEFAULT "Asia/Dhaka"
+	টাইমজোন
+	
+
+৩.২ PostgreSQL — Groups Table
+Column
+	Type
+	Constraint
+	বিবরণ
+	id
+	UUID
+	PRIMARY KEY
+	গ্রুপ আইডি
+	name
+	VARCHAR(100)
+	NOT NULL
+	গ্রুপের নাম
+	description
+	TEXT
+	NULLABLE
+	গ্রুপের বিবরণ
+	avatar_url
+	TEXT
+	NULLABLE
+	গ্রুপের আইকন
+	type
+	ENUM
+	NOT NULL
+	public/private/secret
+	owner_id
+	UUID
+	FK → users.id
+	গ্রুপ নির্মাতা
+	max_members
+	INTEGER
+	DEFAULT 256
+	সর্বোচ্চ সদস্য
+	invite_link
+	VARCHAR(100)
+	UNIQUE, NULLABLE
+	ইনভাইট লিংক
+	is_invite_only
+	BOOLEAN
+	DEFAULT false
+	শুধু ইনভাইটে যোগ?
+	message_retention_days
+	INTEGER
+	DEFAULT NULL
+	মেসেজ রাখার মেয়াদ
+	created_at
+	TIMESTAMPTZ
+	DEFAULT NOW()
+	তৈরির সময়
+	
+
+৩.৩ PostgreSQL — Group Members Table
+Column
+	Type
+	Constraint
+	বিবরণ
+	id
+	UUID
+	PRIMARY KEY
+	
+
+	group_id
+	UUID
+	FK → groups.id
+	গ্রুপ রেফারেন্স
+	user_id
+	UUID
+	FK → users.id
+	সদস্য রেফারেন্স
+	role
+	ENUM
+	DEFAULT "member"
+	owner/admin/moderator/member
+	nickname
+	VARCHAR(100)
+	NULLABLE
+	গ্রুপে কাস্টম নাম
+	muted_until
+	TIMESTAMPTZ
+	NULLABLE
+	মিউট মেয়াদ শেষের সময়
+	joined_at
+	TIMESTAMPTZ
+	DEFAULT NOW()
+	যোগদানের সময়
+	last_read_at
+	TIMESTAMPTZ
+	NULLABLE
+	সর্বশেষ পড়ার সময়
+	
+
+৩.৪ PostgreSQL — Conversations Table (One-to-One & Private)
+Column
+	Type
+	Constraint
+	বিবরণ
+	id
+	UUID
+	PRIMARY KEY
+	
+
+	type
+	ENUM
+	NOT NULL
+	direct/private_encrypted
+	participant_1
+	UUID
+	FK → users.id
+	অংশগ্রহণকারী ১
+	participant_2
+	UUID
+	FK → users.id
+	অংশগ্রহণকারী ২
+	is_blocked
+	BOOLEAN
+	DEFAULT false
+	ব্লক করা হয়েছে?
+	blocked_by
+	UUID
+	FK → users.id
+	কে ব্লক করেছে
+	encryption_key_hash
+	TEXT
+	NULLABLE
+	E2E encryption identifier
+	created_at
+	TIMESTAMPTZ
+	DEFAULT NOW()
+	
+
+	
+
+৩.৫ MongoDB — Messages Collection
+messages (MongoDB Collection — Schema)
+	{
+	  _id: ObjectId,
+	  conversation_id: String,        // PostgreSQL conversation.id অথবা group.id
+	  conversation_type: String,      // "direct" | "group" | "private"
+	  sender_id: String,              // PostgreSQL user.id
+	  message_type: String,           // "text" | "image" | "video" | "audio" | "file" | "sticker" | "location" | "reply" | "forwarded"
+	  content: {
+	    text: String,                 // টেক্সট বা ক্যাপশন
+	    media_url: String,            // Cloudinary URL
+	    media_type: String,           // MIME type
+	    media_size: Number,           // bytes
+	    thumbnail_url: String,        // ভিডিওর থাম্বনেইল
+	    file_name: String,            // ফাইলের নাম
+	    duration: Number,             // অডিও/ভিডিওর দৈর্ঘ্য (seconds)
+	    location: { lat, lng, name }, // লোকেশন শেয়ার
+	    is_encrypted: Boolean,        // E2E?
+	    encrypted_content: String,    // encrypted payload
+	  },
+	  reply_to: ObjectId,             // কোন মেসেজের রিপ্লাই
+	  forwarded_from: ObjectId,       // কোথা থেকে ফরোয়ার্ড
+	  reactions: [{
+	    user_id: String,
+	    emoji: String,
+	    reacted_at: Date
+	  }],
+	  read_receipts: [{
+	    user_id: String,
+	    read_at: Date
+	  }],
+	  delivered_to: [String],         // delivered user_ids
+	  edited_at: Date,
+	  edit_history: [{ content, edited_at }],
+	  deleted_for: [String],          // user_ids যাদের জন্য ডিলিট
+	  is_deleted_for_all: Boolean,
+	  pinned_by: String,
+	  pinned_at: Date,
+	  created_at: Date,
+	  ttl: Date,                      // Auto-delete time (Disappearing messages)
+	}
+	
+
+৩.৬ Redis — Key Structure
+Key Pattern
+	Value
+	TTL
+	ব্যবহার
+	user:presence:{user_id}
+	"online" / "away"
+	30 sec
+	অনলাইন স্ট্যাটাস
+	session:{token}
+	User JSON
+	7 days
+	Session data
+	rate:msg:{user_id}
+	Count
+	1 min
+	Message rate limiting
+	chat:typing:{conv_id}
+	[user_ids]
+	5 sec
+	Typing indicator
+	otp:{email}
+	OTP hash
+	10 min
+	Email verification
+	unread:{user_id}:{conv_id}
+	Count
+	No TTL
+	Unread message count
+	
+
+
+
+৪. ফিচার রিকোয়ারমেন্ট (Phase 1)
+৪.১ ইউজার অথেন্টিকেশন ও অ্যাকাউন্ট
+৪.১.১ রেজিস্ট্রেশন
+* ইমেইল + পাসওয়ার্ড দিয়ে রেজিস্ট্রেশন (Manual — bcrypt হ্যাশ)
+* ফোন নম্বর + OTP দিয়ে রেজিস্ট্রেশন (Resend Email OTP)
+* ইমেইল ভেরিফিকেশন — ৬ সংখ্যার OTP (১০ মিনিট মেয়াদ, Redis-এ সংরক্ষিত)
+* Username অটো-সাজেশন ও ইউনিক চেক
+* Password strength indicator
+
+
+৪.১.২ লগইন ও সিকিউরিটি
+* JWT Access Token (15 মিনিট) + Refresh Token (7 দিন)
+* Two-Factor Authentication (2FA) — TOTP (Google Authenticator)
+* Device management — সকল লগইন ডিভাইস দেখা ও লগআউট
+* Rate limiting — ব্রুট ফোর্স প্রতিরোধ
+* IP-based suspicious login notification
+* "Remember me" অপশন
+* পাসওয়ার্ড রিসেট (Email OTP)
+
+
+৪.২ ইউজার প্রোফাইল
+* প্রোফাইল ছবি আপলোড ও ক্রপ করার সুবিধা
+* Display name, username, bio আপডেট
+* অনলাইন স্ট্যাটাস কাস্টমাইজেশন — Online / Away / Busy / Invisible
+* Custom Status Message (যেমন: "Meeting-এ আছি")
+* Last seen কে কারা দেখতে পাবে — সেটিং
+* প্রোফাইল ছবি কে দেখতে পাবে — সেটিং (Everyone / Contacts / Nobody)
+* লিংকড অ্যাকাউন্ট (Google, GitHub)
+* অ্যাকাউন্ট ডিলিট অপশন (30 দিন grace period)
+
+
+৪.৩ One-to-One চ্যাট
+* রিয়েল-টাইম মেসেজ পাঠানো ও গ্রহণ (Socket.io)
+* Message Types: Text, Image, Video, Audio, File, Location, Sticker, GIF
+* Delivered ✓ এবং Read ✓✓ receipt
+* Typing indicator ("লিখছেন...")
+* মেসেজ Edit করা (edit history সহ)
+* মেসেজ Delete — "শুধু আমার কাছে" অথবা "সবার কাছে"
+* মেসেজে Reply (quote করে উত্তর দেওয়া)
+* মেসেজ Forward (একাধিক কনভার্সেশনে)
+* মেসেজ Pin করা
+* Emoji Reactions (👍❤️😂😮😢😡)
+* মেসেজ Search (কনভার্সেশনের ভেতরে)
+* Media Gallery — সব শেয়ারকৃত ছবি/ফাইল দেখা
+* Disappearing Messages (Auto-delete: 1h / 24h / 7d / custom)
+* মেসেজ Bookmark/Star করা
+* User Block / Unblock
+* Report ইউজার
+
+
+৪.৪ গ্রুপ চ্যাট
+৪.৪.১ গ্রুপ তৈরি ও ম্যানেজমেন্ট
+* গ্রুপ তৈরি (নাম, ছবি, বিবরণ সহ)
+* গ্রুপের ধরন: Public / Private / Secret
+* ইনভাইট লিংক জেনারেট ও শেয়ার
+* QR Code দিয়ে গ্রুপে যোগ দেওয়া
+* সর্বোচ্চ ২৫৬ সদস্য (কনফিগারযোগ্য)
+
+
+৪.৪.২ গ্রুপ রোল ও পার্মিশন
+রোল
+	পার্মিশন
+	Owner
+	সব কিছু — গ্রুপ ডিলিট, Admin নিয়োগ, সেটিংস পরিবর্তন
+	Admin
+	সদস্য যোগ/বাদ, Moderator নিয়োগ, মেসেজ ডিলিট, Mute সদস্য
+	Moderator
+	মেসেজ ডিলিট, সদস্য Mute করা, রিপোর্ট পর্যালোচনা
+	Member
+	মেসেজ পাঠানো, ফাইল শেয়ার (পার্মিশন থাকলে)
+	
+
+৪.৪.৩ গ্রুপ-বিশেষ ফিচার
+* মেসেজ Announcement — শুধু Admin পাঠাতে পারবে
+* @mention — নির্দিষ্ট সদস্যকে ট্যাগ করা
+* গ্রুপ পোল (Voting)
+* Event / Scheduled Message
+* মেসেজ Pin করা (একাধিক)
+* গ্রুপ Search (মেসেজ ও সদস্য)
+* সদস্য কার কথা দেখতে পাবে — সেটিং
+
+
+৪.৫ প্রাইভেট / এনক্রিপ্টেড চ্যাট
+* End-to-End Encryption (E2EE) সমর্থন — Signal Protocol বা AES-256
+* Secret Chat — শুধু সেই ডিভাইসে সীমাবদ্ধ (no cloud backup)
+* Screenshot notification — অন্য পক্ষ স্ক্রিনশট নিলে সতর্ক করবে
+* Self-destructing messages — টাইমার অনুযায়ী অটো-ডিলিট
+* "Lock" ফিচার — নির্দিষ্ট চ্যাট PIN/fingerprint দিয়ে লক
+* No message forwarding — সিক্রেট চ্যাট থেকে ফরোয়ার্ড করা যাবে না
+
+
+৪.৬ নোটিফিকেশন সিস্টেম
+* Browser Push Notification (Web Push API)
+* In-App Notification (Real-time via Socket.io)
+* Email Notification (নতুন বার্তা, উল্লেখযোগ্য ঘটনা)
+* Notification preferences — প্রতিটি চ্যাট/গ্রুপের জন্য আলাদা সেটিং
+* Do Not Disturb (DND) মোড
+* Mute conversation (নির্দিষ্ট সময়ের জন্য)
+
+
+৪.৭ ফাইল ও মিডিয়া
+ধরন
+	সর্বোচ্চ সাইজ
+	ফরম্যাট
+	স্টোরেজ
+	ছবি
+	10 MB
+	JPG, PNG, GIF, WEBP
+	Cloudinary (auto-compress)
+	ভিডিও
+	100 MB
+	MP4, MOV, AVI
+	Cloudinary (HLS streaming)
+	অডিও
+	25 MB
+	MP3, OGG, WAV, M4A
+	Cloudinary
+	ডকুমেন্ট
+	50 MB
+	PDF, DOCX, XLSX, PPTX, TXT
+	Cloudinary/S3
+	Voice Message
+	5 মিনিট
+	OGG/WEBM
+	Cloudinary
+	
+
+৪.৮ অতিরিক্ত প্রস্তাবিত ফিচার এগুলো বাস্তবায়ন করা উচিত। 
+* Contact / Friends সিস্টেম — যোগাযোগের তালিকা
+* User Discovery — নাম বা username দিয়ে খোঁজা
+* Chatbot Integration (ভবিষ্যৎ, Webhook-based)
+* Message Translation (Google Translate API)
+* Sticker ও Custom Emoji Pack
+* Dark / Light / System Theme
+* Keyboard Shortcuts (Desktop)
+* Message Drafts (Auto-save)
+* Chat Export (JSON বা TXT ফরম্যাটে)
+* Admin Dashboard — ইউজার ম্যানেজমেন্ট, রিপোর্ট পর্যালোচনা
+
+
+
+
+৫. API এন্ডপয়েন্ট ডিজাইন
+৫.১ Authentication API
+Method
+	Endpoint
+	বিবরণ
+	Auth?
+	POST
+	/api/auth/register
+	নতুন অ্যাকাউন্ট তৈরি
+	না
+	POST
+	/api/auth/login
+	লগইন, JWT টোকেন
+	না
+	POST
+	/api/auth/logout
+	লগআউট, টোকেন বাতিল
+	হ্যাঁ
+	POST
+	/api/auth/refresh
+	Access Token রিনিউ
+	Refresh Token
+	POST
+	/api/auth/forgot-password
+	পাসওয়ার্ড রিসেট OTP
+	না
+	POST
+	/api/auth/reset-password
+	নতুন পাসওয়ার্ড সেট
+	OTP
+	POST
+	/api/auth/verify-email
+	Email OTP ভেরিফাই
+	না
+	POST
+	/api/auth/2fa/enable
+	2FA সক্রিয় করা
+	হ্যাঁ
+	POST
+	/api/auth/2fa/verify
+	2FA কোড যাচাই
+	হ্যাঁ
+	
+
+৫.২ User API
+Method
+	Endpoint
+	বিবরণ
+	Auth?
+	GET
+	/api/users/me
+	নিজের প্রোফাইল
+	হ্যাঁ
+	PUT
+	/api/users/me
+	প্রোফাইল আপডেট
+	হ্যাঁ
+	POST
+	/api/users/me/avatar
+	প্রোফাইল ছবি আপলোড
+	হ্যাঁ
+	GET
+	/api/users/search?q=
+	ইউজার খোঁজা
+	হ্যাঁ
+	GET
+	/api/users/:id
+	অন্য ইউজারের প্রোফাইল
+	হ্যাঁ
+	POST
+	/api/users/:id/block
+	ইউজার ব্লক
+	হ্যাঁ
+	DELETE
+	/api/users/:id/block
+	ব্লক সরানো
+	হ্যাঁ
+	POST
+	/api/users/:id/report
+	ইউজার রিপোর্ট
+	হ্যাঁ
+	GET
+	/api/users/me/devices
+	লগইন ডিভাইস তালিকা
+	হ্যাঁ
+	DELETE
+	/api/users/me/devices/:id
+	ডিভাইস লগআউট
+	হ্যাঁ
+	
+
+৫.৩ Conversation API
+Method
+	Endpoint
+	বিবরণ
+	Auth?
+	GET
+	/api/conversations
+	সকল কনভার্সেশন তালিকা
+	হ্যাঁ
+	POST
+	/api/conversations
+	নতুন Direct চ্যাট শুরু
+	হ্যাঁ
+	GET
+	/api/conversations/:id
+	নির্দিষ্ট কনভার্সেশন
+	হ্যাঁ
+	DELETE
+	/api/conversations/:id
+	চ্যাট ডিলিট
+	হ্যাঁ
+	GET
+	/api/conversations/:id/messages
+	মেসেজ তালিকা (paginated)
+	হ্যাঁ
+	POST
+	/api/conversations/:id/messages
+	মেসেজ পাঠানো
+	হ্যাঁ
+	PUT
+	/api/messages/:id
+	মেসেজ এডিট
+	হ্যাঁ
+	DELETE
+	/api/messages/:id
+	মেসেজ ডিলিট
+	হ্যাঁ
+	GET
+	/api/conversations/:id/media
+	শেয়ারকৃত মিডিয়া
+	হ্যাঁ
+	POST
+	/api/messages/:id/reactions
+	Emoji Reaction
+	হ্যাঁ
+	
+
+৫.৪ Group API
+Method
+	Endpoint
+	বিবরণ
+	Auth?
+	GET
+	/api/groups
+	আমার গ্রুপ তালিকা
+	হ্যাঁ
+	POST
+	/api/groups
+	নতুন গ্রুপ তৈরি
+	হ্যাঁ
+	GET
+	/api/groups/:id
+	গ্রুপ বিবরণ
+	হ্যাঁ
+	PUT
+	/api/groups/:id
+	গ্রুপ আপডেট (Admin)
+	Admin
+	DELETE
+	/api/groups/:id
+	গ্রুপ ডিলিট (Owner)
+	Owner
+	GET
+	/api/groups/:id/members
+	সদস্য তালিকা
+	হ্যাঁ
+	POST
+	/api/groups/:id/members
+	সদস্য যোগ
+	Admin
+	DELETE
+	/api/groups/:id/members/:uid
+	সদস্য বাদ
+	Admin
+	PUT
+	/api/groups/:id/members/:uid/role
+	রোল পরিবর্তন
+	Admin
+	POST
+	/api/groups/join/:invite_link
+	ইনভাইট লিংকে যোগ
+	হ্যাঁ
+	POST
+	/api/groups/:id/leave
+	গ্রুপ ছাড়া
+	হ্যাঁ
+	POST
+	/api/groups/:id/polls
+	পোল তৈরি
+	হ্যাঁ
+	
+
+
+
+৬. Socket.io Events
+৬.১ Client → Server Events
+Event
+	Payload
+	বিবরণ
+	join_conversation
+	{ conversation_id }
+	রুমে যোগ দেওয়া
+	leave_conversation
+	{ conversation_id }
+	রুম ছাড়া
+	send_message
+	{ conv_id, content, type, reply_to }
+	মেসেজ পাঠানো
+	typing_start
+	{ conversation_id }
+	টাইপিং শুরু
+	typing_stop
+	{ conversation_id }
+	টাইপিং বন্ধ
+	message_read
+	{ message_id, conversation_id }
+	মেসেজ পড়া হয়েছে
+	mark_delivered
+	{ message_id }
+	মেসেজ ডেলিভার নিশ্চিত
+	react_message
+	{ message_id, emoji }
+	Emoji Reaction
+	pin_message
+	{ message_id, conversation_id }
+	মেসেজ পিন
+	delete_message
+	{ message_id, for_all }
+	মেসেজ ডিলিট
+	update_presence
+	{ status }
+	অনলাইন স্ট্যাটাস আপডেট
+	
+
+৬.২ Server → Client Events
+Event
+	Payload
+	বিবরণ
+	new_message
+	{ message object }
+	নতুন মেসেজ এসেছে
+	message_delivered
+	{ message_id, user_id }
+	মেসেজ ডেলিভার হয়েছে
+	message_read
+	{ message_id, user_id, read_at }
+	মেসেজ পড়া হয়েছে
+	message_edited
+	{ message_id, new_content }
+	মেসেজ এডিট হয়েছে
+	message_deleted
+	{ message_id, deleted_for_all }
+	মেসেজ ডিলিট হয়েছে
+	reaction_update
+	{ message_id, reactions }
+	Reaction আপডেট
+	user_typing
+	{ user_id, conversation_id }
+	কেউ টাইপ করছে
+	user_stopped_typing
+	{ user_id, conversation_id }
+	টাইপিং বন্ধ
+	presence_update
+	{ user_id, status, last_seen }
+	কারো স্ট্যাটাস পরিবর্তন
+	new_conversation
+	{ conversation object }
+	নতুন চ্যাট শুরু হয়েছে
+	group_updated
+	{ group_id, changes }
+	গ্রুপ তথ্য পরিবর্তন
+	member_joined
+	{ group_id, user }
+	গ্রুপে নতুন সদস্য
+	member_left
+	{ group_id, user_id }
+	সদস্য গ্রুপ ছেড়েছে
+	
+
+
+
+৭. সিকিউরিটি রিকোয়ারমেন্ট
+৭.১ Authentication Security
+* JWT Secret Rotation — নিয়মিত কী পরিবর্তন
+* Refresh Token Rotation — প্রতিবার ব্যবহারে নতুন Refresh Token
+* Token Blacklisting — লগআউটে Redis-এ টোকেন বাতিল
+* Account lockout — ৫ বার ব্যর্থ লগইনে ৩০ মিনিট লক
+* CSRF Protection — SameSite cookie policy
+
+
+৭.২ API Security
+* Rate Limiting — প্রতি IP প্রতি মিনিটে সর্বোচ্চ ১০০ request
+* Helmet.js — Secure HTTP headers
+* CORS — শুধু অনুমোদিত domain থেকে request
+* Input Validation — সকল ইনপুট sanitize ও validate
+* SQL Injection প্রতিরোধ — Parameterized queries / ORM
+* XSS Protection — মেসেজ content sanitize
+* File Upload Validation — MIME type ও extension চেক
+
+
+৭.৩ Data Privacy
+* GDPR Compliance — ইউজার ডেটা এক্সপোর্ট ও ডিলিটের সুবিধা
+* Password Storage — bcrypt (cost factor ≥ 12)
+* Sensitive Data Encryption at Rest — DB encryption
+* Private Chat — End-to-End Encryption (Signal Protocol)
+* Audit Logs — সংবেদনশীল কার্যক্রমের লগ রাখা
+
+
+
+
+৮. পারফরম্যান্স রিকোয়ারমেন্ট
+মেট্রিক
+	লক্ষ্যমাত্রা
+	পদ্ধতি
+	Message Delivery Latency
+	< 200ms (same region)
+	WebSocket + Redis Pub/Sub
+	API Response Time
+	< 300ms (95th percentile)
+	Redis Cache, DB Indexing
+	Concurrent Users
+	10,000 (Phase 1)
+	Horizontal Scaling, Load Balancer
+	Message History Load
+	< 500ms (last 50 messages)
+	MongoDB Index + Pagination
+	File Upload
+	< 30s (100MB)
+	Multipart + Chunked Upload
+	Uptime SLA
+	99.5%
+	PM2 + Health Checks + Nginx
+	Search Response
+	< 1s (full-text search)
+	MongoDB Atlas Search / Elasticsearch
+	
+
+
+
+৯. UI/UX গাইডলাইন
+৯.১ লেআউট কাঠামো
+Desktop Layout (3-column)
+	┌──────────┬──────────────────────┬───────────────┐
+	│ Sidebar  │   Chat Window        │  Info Panel   │
+	│ (280px)  │   (flex-grow)        │   (320px)     │
+	│ Contacts │   Messages List      │  Profile      │
+	│ Groups   │   Message Input      │  Media        │
+	│ Search   │   Typing Indicator   │  Members      │
+	└──────────┴──────────────────────┴───────────────┘
+	
+
+৯.২ মূল UI কম্পোনেন্ট
+* Message Bubble — sent (right, blue) / received (left, white)
+* Reaction Picker — Emoji সিলেক্ট করার floating panel
+* Reply Preview — উত্তর দেওয়া মেসেজের preview দেখানো
+* Media Lightbox — ছবি/ভিডিও ফুলস্ক্রিনে দেখা
+* Scroll-to-Bottom Button — নতুন মেসেজে ফিরে যাওয়া
+* Unread Count Badge — চ্যাট আইকনে সংখ্যা দেখানো
+* Voice Message Recorder — in-chat অডিও রেকর্ডিং বার
+
+
+৯.৩ Accessibility
+* WCAG 2.1 AA standard অনুসরণ করা
+* Keyboard navigation support
+* Screen reader compatibility (ARIA labels)
+* High contrast mode
+* Font size adjustment সুবিধা
+
+
+
+
+১০. ডেপ্লয়মেন্ট ও DevOps
+১০.১ ডেপ্লয়মেন্ট আর্কিটেকচার
+সার্ভিস
+	প্ল্যাটফর্ম (Development)
+	প্ল্যাটফর্ম (Production)
+	Frontend (React)
+	Vite Dev Server
+	Vercel / Netlify / Nginx
+	Backend (Node/Express)
+	Nodemon
+	PM2 + Nginx (Ubuntu VPS)
+	MongoDB
+	Local / Docker
+	MongoDB Atlas (M10+)
+	PostgreSQL
+	Local / Docker
+	Supabase (DB only, no auth) — Free 500MB
+	Redis
+	Local / Docker
+	Upstash / Redis Cloud / Docker
+	File Storage
+	Local disk
+	Cloudinary / AWS S3
+	Email
+	Ethereal (test)
+	SendGrid / AWS SES
+	SSL/TLS
+	HTTP
+	Let's Encrypt (Certbot)
+	
+
+১০.২ Environment Variables
+Required .env Variables
+	# Server
+	NODE_ENV=production
+	PORT=5000
+	
+
+	# JWT
+	JWT_SECRET=<strong-secret>
+	JWT_REFRESH_SECRET=<another-secret>
+	JWT_EXPIRES_IN=15m
+	JWT_REFRESH_EXPIRES_IN=7d
+	
+
+	# MongoDB
+	MONGODB_URI=mongodb+srv://...
+	
+
+	# PostgreSQL
+	DATABASE_URL=postgresql://user:pass@host/dbname
+	
+
+	# Redis
+	REDIS_URL=redis://...
+	
+
+	# Cloudinary
+	CLOUDINARY_CLOUD_NAME=...
+	CLOUDINARY_API_KEY=...
+	CLOUDINARY_API_SECRET=...
+	
+
+	# Email
+	EMAIL_HOST=smtp.sendgrid.net
+	EMAIL_PORT=587
+	EMAIL_USER=apikey
+	EMAIL_PASS=<sendgrid-api-key>
+	
+
+	# Resend (Free Email — resend.com)
+	RESEND_API_KEY=re_...
+	
+
+	# App
+	FRONTEND_URL=https://tong.app
+
+
+	JWT_SECRET=<min-32-char-random-string>
+	JWT_REFRESH_SECRET=<another-32-char-random-string>
+	
+
+
+
+১১. ভবিষ্যৎ ফেজের জন্য প্রস্তুতি
+১১.১ Phase 2 ও ৩ (Audio/Video Calling)
+* WebRTC পরিকাঠামো তৈরির জন্য STUN/TURN Server কনফিগার রাখুন
+* Media Server হিসেবে mediasoup অথবা LiveKit বিবেচনা করুন
+* Socket.io-তে signaling event এর জন্য namespace আলাদা রাখুন (/calling)
+* Database-এ call_logs table এখনই তৈরি করে রাখুন
+
+
+১১.২ Phase 4 (Anonymous Chat)
+* Anonymous user-দের জন্য temporary UUID session তৈরির কাঠামো রাখুন
+* Matching Queue সিস্টেমের জন্য Redis Sorted Set ব্যবহার করুন
+* Report ও Moderation সিস্টেম Phase 1 থেকেই শক্তিশালী রাখুন
+
+
+১১.৩ Phase 5 (Mobile App)
+* React Native ব্যবহার করলে বিদ্যমান React component logic পুনরায় ব্যবহারযোগ্য হবে
+* API সব সময় Mobile-friendly রাখুন — Pagination, Compression
+* Push Notification এর জন্য FCM (Firebase Cloud Messaging) এখনই পরিকল্পনা করুন
+* Offline Mode এর জন্য SQLite (React Native) + Sync Strategy ঠিক করুন
+
+
+
+
+১২. ডেভেলপমেন্ট টাইমলাইন (Phase 1)
+সপ্তাহ
+	কাজ
+	ডেলিভারেবল
+	Week 1-2
+	Project Setup, Auth System (Register/Login/JWT/2FA)
+	Working Auth API + UI
+	Week 3-4
+	User Profile, Contact System, One-to-One Chat (REST)
+	Profile UI + Chat API
+	Week 5-6
+	Socket.io Integration, Real-time Messaging, Read Receipts
+	Live Chat Working
+	Week 7-8
+	Group Chat, Roles, Permissions, Group Management
+	Full Group Chat
+	Week 9-10
+	File/Media Upload, Voice Message, Reactions, Reply
+	Rich Messaging
+	Week 11-12
+	Private/Encrypted Chat, Disappearing Messages, Block
+	Secret Chat
+	Week 13-14
+	Notification System, Search, Admin Panel, Polish
+	Full Feature Complete
+	Week 15-16
+	Testing (Unit/Integration/E2E), Bug Fix, Deployment
+	Production Ready
+	
+
+
+
+১৩. টেস্টিং কৌশল
+১৩.১ টেস্টিং স্তর
+* Unit Testing — Jest (Backend), React Testing Library (Frontend)
+* Integration Testing — Supertest (API endpoints)
+* E2E Testing — Playwright অথবা Cypress
+* Load Testing — k6 অথবা Artillery (Socket.io concurrency)
+* Security Testing — OWASP ZAP, npm audit
+
+
+১৩.২ মূল টেস্ট কেস
+* একই সময়ে ১০০ ইউজারের মেসেজ পাঠানো — কোনো মেসেজ হারানো যাবে না
+* নেটওয়ার্ক বিচ্ছিন্ন হলে Reconnection ও মেসেজ সিঙ্ক
+* বড় ফাইল (100MB) আপলোড সফলভাবে সম্পন্ন হওয়া
+* JWT টোকেন মেয়াদ শেষে Refresh Token কাজ করা
+* Block করা ইউজার মেসেজ পাঠাতে না পারা
+
+
+
+
+১৪. সারসংক্ষেপ ও পরামর্শ
+tong প্রজেক্টের Phase 1 সফলভাবে সম্পন্ন করতে নিচের বিষয়গুলো সবচেয়ে গুরুত্বপূর্ণ:
+
+
+1. MongoDB ব্যবহার করুন messages-এর জন্য এবং PostgreSQL ব্যবহার করুন users ও groups-এর জন্য — এই হাইব্রিড পদ্ধতি পরবর্তী ফেজগুলোতে সবচেয়ে কার্যকর হবে।
+2. Socket.io namespace আলাদা রাখুন — /chat, /notifications, /calling (ভবিষ্যতের জন্য) — এতে কোড পরিষ্কার থাকবে।
+3. Redis থেকে শুরু করুন — Online presence ও typing indicator-এর জন্য Redis অপরিহার্য এবং এটি পরে Cache ও Queue-এর কাজেও আসবে।
+4. API প্রথম থেকেই Versioned রাখুন (/api/v1/...) — Mobile App আসলে পুরানো version support করা সহজ হবে।
+5. Test-Driven Development (TDD) অনুসরণ করুন — বড় প্রজেক্টে পরে bug fix করা অনেক কঠিন হয়।
+
+
+এই SRS ডকুমেন্টটি একটি living document — প্রজেক্ট এগিয়ে যাওয়ার সাথে সাথে প্রয়োজন অনুযায়ী আপডেট করুন।
+
+
+— tong SRS v1.0 | Phase 1: Complete Messaging System —
+
+
+Confidential — ChatFlow Project  |  Page  of

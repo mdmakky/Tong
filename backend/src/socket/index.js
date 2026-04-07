@@ -44,11 +44,25 @@ const initializeSocket = (io) => {
   });
 
   // ─── Connection Handler ───
-  io.on('connection', (socket) => {
+  io.on('connection', async (socket) => {
     console.log(`🔌 User connected: ${socket.user.display_name} (${socket.user.id})`);
 
     // Join user's personal room for direct notifications
     socket.join(`user:${socket.user.id}`);
+
+    // Auto-join all existing conversation rooms so messages arrive in real-time
+    try {
+      const convs = await prisma.conversation.findMany({
+        where: {
+          OR: [
+            { participant_1: socket.user.id },
+            { participant_2: socket.user.id },
+          ],
+        },
+        select: { id: true },
+      });
+      convs.forEach(({ id }) => socket.join(`conv:${id}`));
+    } catch (_) {}
 
     // Register all event handlers
     chatHandler(io, socket);

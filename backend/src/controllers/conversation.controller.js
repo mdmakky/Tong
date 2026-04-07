@@ -106,12 +106,17 @@ export const createConversation = async (req, res, next) => {
     if (block) throw ApiError.forbidden('Cannot create conversation — user is blocked');
 
     // Check existing conversation (either direction)
+    const userSelect = { id: true, username: true, display_name: true, avatar_url: true };
     const existing = await prisma.conversation.findFirst({
       where: {
         OR: [
           { participant_1: userId, participant_2: participant_id },
           { participant_1: participant_id, participant_2: userId },
         ],
+      },
+      include: {
+        user1: { select: userSelect },
+        user2: { select: userSelect },
       },
     });
 
@@ -134,6 +139,21 @@ export const createConversation = async (req, res, next) => {
         },
       },
     });
+
+    // Notify the other participant via socket
+    const io = req.app.get('io');
+    if (io) {
+      const convForOther = {
+        id: conversation.id,
+        type: conversation.type,
+        other_user: conversation.user1, // user1 = creator; for B, their "other" is user1 (A)
+        last_message: null,
+        unread_count: 0,
+        created_at: conversation.created_at,
+        updated_at: conversation.updated_at,
+      };
+      io.to(`user:${participant_id}`).emit('new_conversation', convForOther);
+    }
 
     return ApiResponse.created('Conversation created', conversation).send(res);
   } catch (err) {

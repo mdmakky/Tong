@@ -60,8 +60,23 @@ const chatHandler = (io, socket) => {
         avatar_url: socket.user.avatar_url,
       };
 
-      // Emit to everyone in the conversation (including sender)
+      // Emit to everyone in the conversation room (includes both participants if joined)
       io.to(`conv:${conversation_id}`).emit('new_message', populated);
+
+      // Also deliver via user rooms as fallback (covers newly created convs where
+      // the other side hasn't joined the conv room yet)
+      if ((conversation_type || 'direct') !== 'group') {
+        try {
+          const conv = await prisma.conversation.findFirst({
+            where: { id: conversation_id },
+            select: { participant_1: true, participant_2: true },
+          });
+          if (conv) {
+            const otherUid = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1;
+            io.to(`user:${otherUid}`).emit('new_message', populated);
+          }
+        } catch (_) {}
+      }
 
       // Update conversation timestamp (for direct chats)
       if (conversation_type !== 'group') {
