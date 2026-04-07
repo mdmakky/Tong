@@ -100,13 +100,19 @@ export default function MessageInput({ conversationId, conversationType }) {
         appendMessage(conversationId, data.data)
       } else {
         if (socket) {
-          // Send via socket for text
+          // Send via socket — server callback adds the saved message to sender's UI
           socket.emit('send_message', {
             conversation_id: conversationId,
             conversation_type: conversationType,
             content: payload.content,
             message_type: payload.message_type,
             reply_to: payload.reply_to,
+          }, (response) => {
+            if (response?.success) {
+              appendMessage(conversationId, response.message)
+            } else if (response?.error) {
+              toast.error(response.error)
+            }
           })
         } else {
           const { data } = await api.sendMessage(conversationId, payload)

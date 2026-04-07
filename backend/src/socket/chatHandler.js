@@ -28,6 +28,26 @@ const chatHandler = (io, socket) => {
         return callback?.({ error: 'conversation_id and content required' });
       }
 
+      // Block check + friend request gate (direct chats only)
+      if ((conversation_type || 'direct') !== 'group') {
+        const convCheck = await prisma.conversation.findFirst({
+          where: { id: conversation_id, is_blocked: false },
+          select: { participant_1: true, participant_2: true },
+        });
+        if (!convCheck) {
+          return callback?.({ error: 'Conversation not found or blocked' });
+        }
+        const otherCheckUid = convCheck.participant_1 === userId
+          ? convCheck.participant_2
+          : convCheck.participant_1;
+        const pendingReq = await prisma.friendRequest.findFirst({
+          where: { sender_id: otherCheckUid, receiver_id: userId, status: 'pending' },
+        });
+        if (pendingReq) {
+          return callback?.({ error: 'Accept the message request first to reply' });
+        }
+      }
+
       // Build message data
       const messageData = {
         conversation_id,
@@ -60,23 +80,8 @@ const chatHandler = (io, socket) => {
         avatar_url: socket.user.avatar_url,
       };
 
-      // Emit to everyone in the conversation room (includes both participants if joined)
-      io.to(`conv:${conversation_id}`).emit('new_message', populated);
-
-      // Also deliver via user rooms as fallback (covers newly created convs where
-      // the other side hasn't joined the conv room yet)
-      if ((conversation_type || 'direct') !== 'group') {
-        try {
-          const conv = await prisma.conversation.findFirst({
-            where: { id: conversation_id },
-            select: { participant_1: true, participant_2: true },
-          });
-          if (conv) {
-            const otherUid = conv.participant_1 === userId ? conv.participant_2 : conv.participant_1;
-            io.to(`user:${otherUid}`).emit('new_message', populated);
-          }
-        } catch (_) {}
-      }
+      // Broadcast to everyone in the conv room EXCEPT the sender
+      socket.to(`conv:${conversation_id}`).emit('new_message', populated);
 
       // Update conversation timestamp (for direct chats)
       if (conversation_type !== 'group') {
@@ -167,6 +172,7 @@ const chatHandler = (io, socket) => {
 
       io.to(`conv:${message.conversation_id}`).emit('reaction_update', {
         message_id,
+        conversation_id: message.conversation_id,
         reactions: message.reactions,
       });
     } catch (err) {

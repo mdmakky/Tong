@@ -19,6 +19,7 @@ export default function useSocketEvents() {
     updatePresence,
     upsertConversation,
     upsertGroup,
+    removeConversation,
     incrementUnread,
     activeConversation,
   } = useChatStore()
@@ -94,6 +95,16 @@ export default function useSocketEvents() {
       socket.emit('join_conversation', { conversation_id: conv.id })
     })
 
+    // ─── Friend request accepted (requester notified) ───
+    socket.on('friend_request_accepted', ({ conversation_id }) => {
+      upsertConversation({ id: conversation_id, request_status: 'accepted' })
+    })
+
+    // ─── Friend request declined (requester notified) ───
+    socket.on('friend_request_declined', ({ conversation_id }) => {
+      removeConversation(conversation_id)
+    })
+
     // ─── Group updated ───
     socket.on('group_updated', ({ group_id, changes }) => {
       upsertGroup({ id: group_id, ...changes })
@@ -120,6 +131,8 @@ export default function useSocketEvents() {
         socket.off('user_stopped_typing')
         socket.off('presence_update')
         socket.off('new_conversation')
+        socket.off('friend_request_accepted')
+        socket.off('friend_request_declined')
         socket.off('group_updated')
         socket.off('member_joined')
         socket.off('member_left')

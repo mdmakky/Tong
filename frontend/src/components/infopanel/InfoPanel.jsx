@@ -3,13 +3,14 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Phone, Video, Star, Users, Image, File, Link2,
   ChevronDown, ChevronRight, Shield, Bell, BellOff,
-  UserMinus, UserX, Flag, Crown, UserCog
+  UserMinus, UserX, UserCheck, Flag, Crown, UserCog
 } from 'lucide-react'
 import clsx from 'clsx'
+import toast from 'react-hot-toast'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import Avatar from '@/components/ui/Avatar'
-import { groupApi, conversationApi } from '@/lib/apiServices'
+import { groupApi, conversationApi, userApi } from '@/lib/apiServices'
 import { formatLastSeen } from '@/utils/helpers'
 
 const SECTIONS = [
@@ -41,14 +42,39 @@ export default function InfoPanel() {
 
 // ─── Direct chat info ─────────────────────────────────────────────────────────
 function DirectInfo({ conversation, currentUser, presenceMap }) {
+  const [blockLoading, setBlockLoading] = useState(false)
+  const { upsertConversation } = useChatStore()
+
   const other =
-    conversation.participant_1?.id === currentUser?.id
-      ? conversation.participant_2
-      : conversation.participant_1
+    conversation.other_user ||
+    (conversation.participant_1 === currentUser?.id ? conversation.user2 : conversation.user1) ||
+    null
 
   const presence = other ? presenceMap[other?.id] : null
   const status = presence?.status || other?.online_status || 'offline'
   const lastSeen = presence?.last_seen || other?.last_seen
+
+  const isBlockedByMe = conversation.is_blocked && conversation.blocked_by === currentUser?.id
+
+  const handleBlock = async () => {
+    if (!other?.id) return
+    setBlockLoading(true)
+    try {
+      if (isBlockedByMe) {
+        await userApi.unblock(other.id)
+        upsertConversation({ id: conversation.id, is_blocked: false, blocked_by: null })
+        toast.success('User unblocked')
+      } else {
+        await userApi.block(other.id)
+        upsertConversation({ id: conversation.id, is_blocked: true, blocked_by: currentUser?.id })
+        toast.success('User blocked')
+      }
+    } catch (_) {
+      toast.error('Failed — please try again')
+    } finally {
+      setBlockLoading(false)
+    }
+  }
 
   return (
     <div className="flex flex-col items-center p-6 border-b border-border">
@@ -81,7 +107,12 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
 
       {/* Actions */}
       <div className="mt-4 self-stretch space-y-1">
-        <ActionRow icon={UserX} label="Block user" danger />
+        <ActionRow
+          icon={isBlockedByMe ? UserCheck : UserX}
+          label={isBlockedByMe ? 'Unblock user' : 'Block user'}
+          danger={!isBlockedByMe}
+          onClick={blockLoading ? undefined : handleBlock}
+        />
         <ActionRow icon={Flag} label="Report" danger />
       </div>
     </div>

@@ -38,6 +38,8 @@ export const conversationApi = {
   getMessages: (id, params) => api.get(`/conversations/${id}/messages`, { params }),
   sendMessage: (id, data) => api.post(`/conversations/${id}/messages`, data),
   getMedia: (id) => api.get(`/conversations/${id}/media`),
+  acceptRequest: (id) => api.post(`/conversations/${id}/accept-request`),
+  declineRequest: (id) => api.post(`/conversations/${id}/decline-request`),
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────

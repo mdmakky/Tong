@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Virtuoso } from 'react-virtuoso'
+import toast from 'react-hot-toast'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import { conversationApi, groupApi } from '@/lib/apiServices'
@@ -26,6 +27,8 @@ export default function ChatWindow() {
     setLoadingMessages,
     loadingMessages,
     clearUnread,
+    removeConversation,
+    upsertConversation,
   } = useChatStore()
 
   const { user } = useAuthStore()
@@ -177,8 +180,82 @@ export default function ChatWindow() {
       {/* Typing indicator */}
       <TypingIndicator names={typingNames} />
 
-      {/* Message input */}
-      <MessageInput conversationId={convId} conversationType={activeType} />
+      {/* Blocked / request prompt / message input */}
+      {activeConversation?.is_blocked ? (
+        <div className="px-4 py-4 border-t border-border bg-bg-secondary text-center text-sm text-text-muted">
+          {activeConversation.blocked_by === user?.id
+            ? 'You blocked this contact. Unblock from the info panel to chat.'
+            : 'You cannot send messages to this contact.'}
+        </div>
+      ) : activeConversation?.request_status === 'pending' && activeConversation?.request_sender_id !== user?.id ? (
+        <RequestPrompt conversationId={convId} />
+      ) : (
+        <>
+          {activeConversation?.request_status === 'pending' && activeConversation?.request_sender_id === user?.id && (
+            <p className="text-center text-xs text-text-muted py-1">
+              Waiting for the other person to accept your message request
+            </p>
+          )}
+          <MessageInput conversationId={convId} conversationType={activeType} />
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Request Prompt ────────────────────────────────────────────────────────────
+function RequestPrompt({ conversationId }) {
+  const [loading, setLoading] = useState(false)
+  const { upsertConversation, removeConversation, setActiveConversation } = useChatStore()
+
+  const handleAccept = async () => {
+    setLoading(true)
+    try {
+      await conversationApi.acceptRequest(conversationId)
+      upsertConversation({ id: conversationId, request_status: 'accepted' })
+      toast.success('Request accepted — you can now chat!')
+    } catch (_) {
+      toast.error('Failed to accept request')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDecline = async () => {
+    setLoading(true)
+    try {
+      await conversationApi.declineRequest(conversationId)
+      removeConversation(conversationId)
+      setActiveConversation(null, null)
+      toast.success('Request declined')
+    } catch (_) {
+      toast.error('Failed to decline request')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="px-6 py-5 border-t border-border bg-bg-secondary flex flex-col items-center gap-3">
+      <p className="text-sm text-text-secondary text-center max-w-xs">
+        This person wants to message you. You can accept or decline their request.
+      </p>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleDecline}
+          disabled={loading}
+          className="px-5 py-2 text-sm rounded-xl border border-border text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors disabled:opacity-50"
+        >
+          Decline
+        </button>
+        <button
+          onClick={handleAccept}
+          disabled={loading}
+          className="px-5 py-2 text-sm rounded-xl bg-accent-yellow text-black font-semibold hover:bg-accent-yellow-dim transition-colors disabled:opacity-50"
+        >
+          {loading ? 'Processing...' : 'Accept'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -45,6 +45,11 @@ const useChatStore = create((set, get) => ({
     }
   },
 
+  removeConversation: (convId) =>
+    set((state) => ({
+      conversations: state.conversations.filter((c) => c.id !== convId),
+    })),
+
   setConversations: (convs) => set({ conversations: convs }),
 
   upsertConversation: (conv) => {
