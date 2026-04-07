@@ -1,14 +1,15 @@
-import { useEffect, useRef } from 'react'
-import { getSocket } from '@/lib/socket'
+import { useEffect } from 'react'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 
 /**
- * Connects all Socket.io server→client events to Zustand store
+ * Connects all Socket.io server→client events to Zustand store.
+ * Socket is read from chatStore so the effect re-runs as soon as
+ * initSocket() stores the instance (fully reactive).
  */
 export default function useSocketEvents() {
-  const socket = getSocket()
-  const bound = useRef(false)
+  // Reactive: re-runs whenever socket is set/cleared in the store
+  const socket = useChatStore((s) => s.socket)
 
   const {
     appendMessage,
@@ -21,123 +22,112 @@ export default function useSocketEvents() {
     upsertGroup,
     removeConversation,
     incrementUnread,
-    activeConversation,
   } = useChatStore()
 
   const { updateUser } = useAuthStore()
 
   useEffect(() => {
-    if (!socket || bound.current) return
-    bound.current = true
+    if (!socket) return
 
     // ─── New message ───
-    socket.on('new_message', (message) => {
+    const onNewMessage = (message) => {
       const convId = message.conversation_id
       appendMessage(convId, message)
       incrementUnread(convId)
-
-      // Update last message in conversation list
       upsertConversation({
         id: convId,
         last_message: message,
         last_message_at: message.created_at,
       })
-    })
+    }
 
     // ─── Message delivered ───
-    socket.on('message_delivered', ({ message_id, conversation_id }) => {
+    const onDelivered = ({ message_id, conversation_id }) => {
       updateMessage(conversation_id, message_id, { status: 'delivered' })
-    })
+    }
 
     // ─── Message read ───
-    socket.on('message_read', ({ message_id, conversation_id }) => {
+    const onRead = ({ message_id, conversation_id }) => {
       updateMessage(conversation_id, message_id, { status: 'read' })
-    })
+    }
 
     // ─── Message edited ───
-    socket.on('message_edited', ({ message_id, conversation_id, new_content, edited_at }) => {
-      updateMessage(conversation_id, message_id, {
-        content: new_content,
-        edited_at,
-      })
-    })
+    const onEdited = ({ message_id, conversation_id, new_content, edited_at }) => {
+      updateMessage(conversation_id, message_id, { content: new_content, edited_at })
+    }
 
     // ─── Message deleted ───
-    socket.on('message_deleted', ({ message_id, conversation_id, deleted_for_all }) => {
-      if (deleted_for_all) {
-        deleteMessage(conversation_id, message_id)
-      }
-    })
+    const onDeleted = ({ message_id, conversation_id, deleted_for_all }) => {
+      if (deleted_for_all) deleteMessage(conversation_id, message_id)
+    }
 
     // ─── Reaction update ───
-    socket.on('reaction_update', ({ message_id, conversation_id, reactions }) => {
+    const onReaction = ({ message_id, conversation_id, reactions }) => {
       updateReaction(conversation_id, message_id, reactions)
-    })
+    }
 
     // ─── Typing ───
-    socket.on('user_typing', ({ user_id, display_name, conversation_id }) => {
+    const onTypingStart = ({ user_id, display_name, conversation_id }) => {
       setUserTyping(conversation_id, { user_id, display_name }, true)
-    })
-
-    socket.on('user_stopped_typing', ({ user_id, conversation_id }) => {
+    }
+    const onTypingStop = ({ user_id, conversation_id }) => {
       setUserTyping(conversation_id, { user_id }, false)
-    })
+    }
 
     // ─── Presence ───
-    socket.on('presence_update', ({ user_id, status, last_seen }) => {
+    const onPresence = ({ user_id, status, last_seen }) => {
       updatePresence(user_id, status, last_seen)
-    })
+    }
 
-    // ─── New conversation (notified by other side creating it) ───
-    socket.on('new_conversation', (conv) => {
+    // ─── New conversation ───
+    const onNewConversation = (conv) => {
       upsertConversation(conv)
-      // Auto-join the socket room so we receive real-time messages immediately
       socket.emit('join_conversation', { conversation_id: conv.id })
-    })
+    }
 
     // ─── Friend request accepted (requester notified) ───
-    socket.on('friend_request_accepted', ({ conversation_id }) => {
+    const onRequestAccepted = ({ conversation_id }) => {
       upsertConversation({ id: conversation_id, request_status: 'accepted' })
-    })
+    }
 
     // ─── Friend request declined (requester notified) ───
-    socket.on('friend_request_declined', ({ conversation_id }) => {
+    const onRequestDeclined = ({ conversation_id }) => {
       removeConversation(conversation_id)
-    })
+    }
 
     // ─── Group updated ───
-    socket.on('group_updated', ({ group_id, changes }) => {
+    const onGroupUpdated = ({ group_id, changes }) => {
       upsertGroup({ id: group_id, ...changes })
-    })
+    }
 
-    // ─── Member events ───
-    socket.on('member_joined', ({ group_id }) => {
-      // Handled via group refetch if needed
-    })
-
-    socket.on('member_left', ({ group_id, user_id }) => {
-      // If current user was removed, remove group from list
-    })
+    socket.on('new_message', onNewMessage)
+    socket.on('message_delivered', onDelivered)
+    socket.on('message_read', onRead)
+    socket.on('message_edited', onEdited)
+    socket.on('message_deleted', onDeleted)
+    socket.on('reaction_update', onReaction)
+    socket.on('user_typing', onTypingStart)
+    socket.on('user_stopped_typing', onTypingStop)
+    socket.on('presence_update', onPresence)
+    socket.on('new_conversation', onNewConversation)
+    socket.on('friend_request_accepted', onRequestAccepted)
+    socket.on('friend_request_declined', onRequestDeclined)
+    socket.on('group_updated', onGroupUpdated)
 
     return () => {
-      if (socket) {
-        socket.off('new_message')
-        socket.off('message_delivered')
-        socket.off('message_read')
-        socket.off('message_edited')
-        socket.off('message_deleted')
-        socket.off('reaction_update')
-        socket.off('user_typing')
-        socket.off('user_stopped_typing')
-        socket.off('presence_update')
-        socket.off('new_conversation')
-        socket.off('friend_request_accepted')
-        socket.off('friend_request_declined')
-        socket.off('group_updated')
-        socket.off('member_joined')
-        socket.off('member_left')
-      }
-      bound.current = false
+      socket.off('new_message', onNewMessage)
+      socket.off('message_delivered', onDelivered)
+      socket.off('message_read', onRead)
+      socket.off('message_edited', onEdited)
+      socket.off('message_deleted', onDeleted)
+      socket.off('reaction_update', onReaction)
+      socket.off('user_typing', onTypingStart)
+      socket.off('user_stopped_typing', onTypingStop)
+      socket.off('presence_update', onPresence)
+      socket.off('new_conversation', onNewConversation)
+      socket.off('friend_request_accepted', onRequestAccepted)
+      socket.off('friend_request_declined', onRequestDeclined)
+      socket.off('group_updated', onGroupUpdated)
     }
   }, [socket])
 }

@@ -75,8 +75,11 @@ const useAuthStore = create(
           const { data } = await api.get('/users/me')
           set({ user: data.data, isAuthenticated: true })
           return data.data
-        } catch (_) {
-          set({ user: null, isAuthenticated: false })
+        } catch (err) {
+          // Only clear session on explicit 401 — NOT on network errors or 5xx
+          if (err.response?.status === 401) {
+            set({ user: null, isAuthenticated: false })
+          }
           return null
         }
       },

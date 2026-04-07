@@ -92,7 +92,10 @@ export default function ConversationList() {
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-sm font-medium text-text-primary truncate">
+                  <span className={clsx(
+                    'text-sm truncate',
+                    unread > 0 ? 'font-bold text-text-primary' : 'font-medium text-text-primary'
+                  )}>
                     {other?.display_name || 'Unknown'}
                   </span>
                   <span className="text-xs text-text-muted flex-shrink-0 ml-2">
@@ -102,7 +105,7 @@ export default function ConversationList() {
                 <div className="flex items-center justify-between">
                   <span className={clsx(
                     'text-xs truncate',
-                    unread > 0 ? 'text-text-secondary font-medium' : 'text-text-muted'
+                    unread > 0 ? 'text-text-primary font-semibold' : 'text-text-muted'
                   )}>
                     {getLastMessage(conv)}
                   </span>

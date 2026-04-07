@@ -8,7 +8,6 @@ import clsx from 'clsx'
 import toast from 'react-hot-toast'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
-import { getSocket } from '@/lib/socket'
 import { conversationApi, groupApi } from '@/lib/apiServices'
 import Avatar from '@/components/ui/Avatar'
 
@@ -28,9 +27,9 @@ export default function MessageInput({ conversationId, conversationType }) {
   const typingTimerRef = useRef(null)
   const recordingIntervalRef = useRef(null)
 
-  const { replyTo, clearReplyTo, appendMessage } = useChatStore()
+  const { replyTo, clearReplyTo, appendMessage, replaceMessage, removeMessage } = useChatStore()
   const { user } = useAuthStore()
-  const socket = getSocket()
+  const socket = useChatStore((s) => s.socket)
 
   // Auto-resize textarea
   useEffect(() => {
@@ -80,16 +79,23 @@ export default function MessageInput({ conversationId, conversationType }) {
     setSending(true)
     socket?.emit('typing_stop', { conversation_id: conversationId })
 
+    // Clear input immediately for snappy UX
+    const sendText = trimmed
+    const sendReplyTo = replyTo
+    setText('')
+    setAttachedFiles([])
+    clearReplyTo()
+
     try {
       const api = conversationType === 'group' ? groupApi : conversationApi
       const payload = {
-        content: { text: trimmed },
+        content: { text: sendText },
         message_type: attachedFiles.length > 0 ? detectFileType(attachedFiles[0]) : 'text',
-        reply_to: replyTo?._id || replyTo?.id || undefined,
+        reply_to: sendReplyTo?._id || sendReplyTo?.id || undefined,
       }
 
       if (attachedFiles.length > 0) {
-        // Upload files via multipart
+        // Upload files via multipart — no optimistic for files
         const form = new FormData()
         form.append('file', attachedFiles[0].file)
         form.append('content', JSON.stringify(payload.content))
@@ -100,7 +106,27 @@ export default function MessageInput({ conversationId, conversationType }) {
         appendMessage(conversationId, data.data)
       } else {
         if (socket) {
-          // Send via socket — server callback adds the saved message to sender's UI
+          // Optimistic: show immediately with pending status
+          const tempId = `temp-${Date.now()}`
+          const optimistic = {
+            _id: tempId,
+            conversation_id: conversationId,
+            sender_id: user?.id,
+            sender: {
+              id: user?.id,
+              username: user?.username,
+              display_name: user?.display_name,
+              avatar_url: user?.avatar_url,
+            },
+            message_type: payload.message_type,
+            content: payload.content,
+            reply_to: payload.reply_to || null,
+            reactions: [],
+            status: 'pending',
+            created_at: new Date().toISOString(),
+          }
+          appendMessage(conversationId, optimistic)
+
           socket.emit('send_message', {
             conversation_id: conversationId,
             conversation_type: conversationType,
@@ -109,9 +135,12 @@ export default function MessageInput({ conversationId, conversationType }) {
             reply_to: payload.reply_to,
           }, (response) => {
             if (response?.success) {
-              appendMessage(conversationId, response.message)
-            } else if (response?.error) {
-              toast.error(response.error)
+              // Replace the optimistic message with the real one
+              replaceMessage(conversationId, tempId, response.message)
+            } else {
+              // Remove the optimistic message and show error
+              removeMessage(conversationId, tempId)
+              toast.error(response?.error || 'Failed to send message')
             }
           })
         } else {
@@ -119,10 +148,6 @@ export default function MessageInput({ conversationId, conversationType }) {
           appendMessage(conversationId, data.data)
         }
       }
-
-      setText('')
-      setAttachedFiles([])
-      clearReplyTo()
     } catch (err) {
       toast.error('Failed to send message')
     } finally {

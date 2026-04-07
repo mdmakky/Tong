@@ -6,6 +6,14 @@ const api = axios.create({
   timeout: 15000,
 })
 
+// Lazy-load authStore to avoid circular dependency
+const forceLogout = () => {
+  // Import dynamically so we don't create circular imports
+  import('@/store/authStore').then(({ default: useAuthStore }) => {
+    useAuthStore.getState().logout()
+  })
+}
+
 // ─── Request Interceptor: attach access token ─────────────────────────────
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token')
@@ -45,10 +53,8 @@ api.interceptors.response.use(
       const refreshToken = localStorage.getItem('refresh_token')
       if (!refreshToken) {
         isRefreshing = false
-        // Clear storage and redirect to login
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        window.location.href = '/login'
+        processQueue(error, null)
+        forceLogout()
         return Promise.reject(error)
       }
 
@@ -67,9 +73,7 @@ api.interceptors.response.use(
         return api(original)
       } catch (refreshError) {
         processQueue(refreshError, null)
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        window.location.href = '/login'
+        forceLogout()
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false

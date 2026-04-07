@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { Virtuoso } from 'react-virtuoso'
 import toast from 'react-hot-toast'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import { conversationApi, groupApi } from '@/lib/apiServices'
-import { getSocket } from '@/lib/socket'
 import ChatHeader from './ChatHeader'
 import MessageItem from './MessageItem'
 import MessageInput from './MessageInput'
@@ -29,11 +27,11 @@ export default function ChatWindow() {
     clearUnread,
     removeConversation,
     upsertConversation,
+    socket,
   } = useChatStore()
 
   const { user } = useAuthStore()
   const convId = activeConversation?.id
-  const socket = getSocket()
 
   const virtuosoRef = useRef(null)
   const [atBottom, setAtBottom] = useState(true)
@@ -42,9 +40,20 @@ export default function ChatWindow() {
 
   const convMessages = messages[convId] || []
 
-  // Fetch messages on conversation change
+  // Fetch messages on conversation change — skips if already cached in store
   useEffect(() => {
     if (!convId) return
+
+    // Already have messages for this conv — don't refetch
+    if (messages[convId]?.length > 0) {
+      // Still join the socket room and mark read
+      if (socket) {
+        socket.emit('join_conversation', { conversation_id: convId })
+        socket.emit('message_read', { conversation_id: convId })
+      }
+      clearUnread(convId)
+      return
+    }
 
     const fetchMessages = async () => {
       setLoadingMessages(convId, true)

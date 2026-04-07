@@ -23,6 +23,9 @@ const useChatStore = create((set, get) => ({
   // Presence (online status)
   presenceMap: {}, // { userId: { status, last_seen } }
 
+  // Socket instance (stored here so React can react to changes)
+  socket: null,
+
   // UI state
   replyTo: null,
   searchQuery: '',
@@ -30,6 +33,8 @@ const useChatStore = create((set, get) => ({
   showInfoPanel: true,
 
   // ─── Actions ──────────────────────────────────────────────
+
+  setSocket: (s) => set({ socket: s }),
 
   setActiveConversation: (conv, type) => {
     set({
@@ -55,12 +60,15 @@ const useChatStore = create((set, get) => ({
   upsertConversation: (conv) => {
     set((state) => {
       const exists = state.conversations.find((c) => c.id === conv.id)
-      if (exists) {
-        return {
-          conversations: state.conversations.map((c) => (c.id === conv.id ? { ...c, ...conv } : c)),
-        }
-      }
-      return { conversations: [conv, ...state.conversations] }
+      const newConvs = exists
+        ? state.conversations.map((c) => (c.id === conv.id ? { ...c, ...conv } : c))
+        : [conv, ...state.conversations]
+      // Also update activeConversation if it's the same conversation
+      const newActive =
+        state.activeConversation?.id === conv.id
+          ? { ...state.activeConversation, ...conv }
+          : state.activeConversation
+      return { conversations: newConvs, activeConversation: newActive }
     })
   },
 
@@ -100,6 +108,28 @@ const useChatStore = create((set, get) => ({
         },
       }
     })
+  },
+
+  replaceMessage: (convId, tempId, realMsg) => {
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [convId]: (state.messages[convId] || []).map((m) =>
+          (m._id || m.id) === tempId ? realMsg : m
+        ),
+      },
+    }))
+  },
+
+  removeMessage: (convId, msgId) => {
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [convId]: (state.messages[convId] || []).filter(
+          (m) => (m._id || m.id) !== msgId
+        ),
+      },
+    }))
   },
 
   updateMessage: (convId, msgId, updates) => {

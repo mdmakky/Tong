@@ -1,13 +1,13 @@
 import { io } from 'socket.io-client'
+import useChatStore from '../store/chatStore.js'
 
-let socket = null
-
-export const getSocket = () => socket
+export const getSocket = () => useChatStore.getState().socket
 
 export const initSocket = (token) => {
-  if (socket?.connected) return socket
+  const existing = useChatStore.getState().socket
+  if (existing?.connected) return existing
 
-  socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000', {
+  const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000', {
     auth: { token },
     transports: ['websocket', 'polling'],
     reconnectionAttempts: 5,
@@ -15,12 +15,16 @@ export const initSocket = (token) => {
     timeout: 10000,
   })
 
+  // Store in Zustand so components reactively know when socket is ready
+  useChatStore.getState().setSocket(socket)
+
   return socket
 }
 
 export const disconnectSocket = () => {
+  const socket = useChatStore.getState().socket
   if (socket) {
     socket.disconnect()
-    socket = null
+    useChatStore.getState().setSocket(null)
   }
 }
