@@ -5,7 +5,9 @@ export const getSocket = () => useChatStore.getState().socket
 
 export const initSocket = (token) => {
   const existing = useChatStore.getState().socket
-  if (existing?.connected) return existing
+  // If we already have a socket object (even if still connecting), reuse it.
+  // socket.io handles reconnection internally — never create a second socket.
+  if (existing) return existing
 
   const socket = io(import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000', {
     auth: { token },

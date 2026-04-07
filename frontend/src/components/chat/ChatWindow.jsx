@@ -40,20 +40,10 @@ export default function ChatWindow() {
 
   const convMessages = messages[convId] || []
 
-  // Fetch messages on conversation change — skips if already cached in store
+  // Effect 1: fetch messages when conversation changes (skips if already cached)
   useEffect(() => {
     if (!convId) return
-
-    // Already have messages for this conv — don't refetch
-    if (messages[convId]?.length > 0) {
-      // Still join the socket room and mark read
-      if (socket) {
-        socket.emit('join_conversation', { conversation_id: convId })
-        socket.emit('message_read', { conversation_id: convId })
-      }
-      clearUnread(convId)
-      return
-    }
+    if (messages[convId]?.length > 0) return // already cached — Effect 2 handles join
 
     const fetchMessages = async () => {
       setLoadingMessages(convId, true)
@@ -72,26 +62,17 @@ export default function ChatWindow() {
     }
 
     fetchMessages()
-
-    // Join socket room
-    if (socket) {
-      socket.emit('join_conversation', { conversation_id: convId })
-    }
-
-    // Clear unread on open
-    clearUnread(convId)
-
-    // Mark messages as read
-    if (socket) {
-      socket.emit('message_read', { conversation_id: convId })
-    }
-
-    return () => {
-      if (socket) {
-        socket.emit('leave_conversation', { conversation_id: convId })
-      }
-    }
   }, [convId])
+
+  // Effect 2: join socket room + mark read whenever convId OR socket changes.
+  // We never emit leave_conversation — the backend keeps us in all rooms so
+  // useSocketEvents can deliver new_message events for every conversation.
+  useEffect(() => {
+    if (!convId || !socket) return
+    socket.emit('join_conversation', { conversation_id: convId })
+    socket.emit('message_read', { conversation_id: convId })
+    clearUnread(convId)
+  }, [convId, socket])
 
   const loadOlderMessages = useCallback(async () => {
     if (!hasMore[convId] || loadingOlder) return
