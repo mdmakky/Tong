@@ -37,7 +37,8 @@ export default function InfoPanel() {
 // ─── Direct chat info ─────────────────────────────────────────────────────────
 function DirectInfo({ conversation, currentUser, presenceMap }) {
   const [blockLoading, setBlockLoading] = useState(false)
-  const { upsertConversation } = useChatStore()
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const { upsertConversation, removeConversation, setActiveConversation } = useChatStore()
 
   const other =
     conversation.other_user ||
@@ -67,6 +68,25 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
       toast.error('Failed — please try again')
     } finally {
       setBlockLoading(false)
+    }
+  }
+
+  const handleDeleteConversation = async () => {
+    if (deleteLoading) return
+
+    const confirmed = window.confirm('Delete this conversation for you?')
+    if (!confirmed) return
+
+    setDeleteLoading(true)
+    try {
+      await conversationApi.delete(conversation.id)
+      removeConversation(conversation.id)
+      setActiveConversation(null, null)
+      toast.success('Conversation deleted')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete conversation')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -106,6 +126,13 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
           label={isBlockedByMe ? 'Unblock user' : 'Block user'}
           danger={!isBlockedByMe}
           onClick={blockLoading ? undefined : handleBlock}
+        />
+        <ActionRow
+          icon={Trash2}
+          label={deleteLoading ? 'Deleting...' : 'Delete conversation'}
+          danger
+          onClick={handleDeleteConversation}
+          disabled={deleteLoading}
         />
         <ActionRow icon={Flag} label="Report" danger />
       </div>

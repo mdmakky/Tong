@@ -66,22 +66,28 @@ export const getConversations = async (req, res, next) => {
     const enriched = await Promise.all(
       conversations.map(async (conv) => {
         const otherUser = conv.participant_1 === userId ? conv.user2 : conv.user1;
-        const lastMessage = await Message.findOne({
+        const baseMessageQuery = {
           conversation_id: conv.id,
           is_deleted: false,
           deleted_for_all: false,
-        })
-          .sort({ created_at: -1 })
-          .select('content message_type sender_id created_at')
-          .lean();
+        };
 
-        // Get unread count
-        const unreadCount = await Message.countDocuments({
-          conversation_id: conv.id,
-          sender_id: { $ne: userId },
-          'read_receipts.user_id': { $ne: userId },
-          is_deleted: false,
-        });
+        const [lastMessage, unreadCount, totalVisibleMessages] = await Promise.all([
+          Message.findOne({
+            ...baseMessageQuery,
+            deleted_for: { $ne: userId },
+          })
+            .sort({ created_at: -1 })
+            .select('content message_type sender_id created_at')
+            .lean(),
+          Message.countDocuments({
+            ...baseMessageQuery,
+            sender_id: { $ne: userId },
+            'read_receipts.user_id': { $ne: userId },
+            deleted_for: { $ne: userId },
+          }),
+          Message.countDocuments(baseMessageQuery),
+        ]);
 
         const friendReq = reqMap[otherUser?.id];
         return {
@@ -97,18 +103,23 @@ export const getConversations = async (req, res, next) => {
           request_sender_id: friendReq?.sender_id || null,
           created_at: conv.created_at,
           updated_at: conv.updated_at,
+          _hidden_for_user: totalVisibleMessages > 0 && !lastMessage,
         };
       })
     );
 
+    const visibleConversations = enriched
+      .filter((conv) => !conv._hidden_for_user)
+      .map(({ _hidden_for_user, ...conv }) => conv);
+
     // Sort by last message time
-    enriched.sort((a, b) => {
+    visibleConversations.sort((a, b) => {
       const aTime = a.last_message?.created_at || a.created_at;
       const bTime = b.last_message?.created_at || b.created_at;
       return new Date(bTime) - new Date(aTime);
     });
 
-    return ApiResponse.ok('Conversations retrieved', enriched).send(res);
+    return ApiResponse.ok('Conversations retrieved', visibleConversations).send(res);
   } catch (err) {
     next(err);
   }

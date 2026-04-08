@@ -51,9 +51,32 @@ const useChatStore = create((set, get) => ({
   },
 
   removeConversation: (convId) =>
-    set((state) => ({
-      conversations: state.conversations.filter((c) => c.id !== convId),
-    })),
+    set((state) => {
+      const isActiveDirect =
+        state.activeType === 'direct' && state.activeConversation?.id === convId
+
+      return {
+        conversations: state.conversations.filter((c) => c.id !== convId),
+        messages: Object.fromEntries(
+          Object.entries(state.messages).filter(([id]) => id !== convId)
+        ),
+        hasMore: Object.fromEntries(
+          Object.entries(state.hasMore).filter(([id]) => id !== convId)
+        ),
+        loadingMessages: Object.fromEntries(
+          Object.entries(state.loadingMessages).filter(([id]) => id !== convId)
+        ),
+        typingUsers: Object.fromEntries(
+          Object.entries(state.typingUsers).filter(([id]) => id !== convId)
+        ),
+        unreadCounts: Object.fromEntries(
+          Object.entries(state.unreadCounts).filter(([id]) => id !== convId)
+        ),
+        activeConversation: isActiveDirect ? null : state.activeConversation,
+        activeType: isActiveDirect ? null : state.activeType,
+        replyTo: isActiveDirect ? null : state.replyTo,
+      }
+    }),
 
   setConversations: (convs) =>
     set((state) => {
