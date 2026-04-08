@@ -4,7 +4,7 @@ services:
     name: tong-backend
     env: node
     rootDir: backend
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && node_modules/.bin/prisma generate
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
