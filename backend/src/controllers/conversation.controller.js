@@ -43,10 +43,10 @@ export const getConversations = async (req, res, next) => {
       },
       include: {
         user1: {
-          select: { id: true, username: true, display_name: true, avatar_url: true, online_status: true, last_seen: true },
+          select: { id: true, username: true, display_name: true, avatar_url: true, bio: true, custom_status: true, online_status: true, last_seen: true },
         },
         user2: {
-          select: { id: true, username: true, display_name: true, avatar_url: true, online_status: true, last_seen: true },
+          select: { id: true, username: true, display_name: true, avatar_url: true, bio: true, custom_status: true, online_status: true, last_seen: true },
         },
       },
       orderBy: { updated_at: 'desc' },
@@ -431,7 +431,6 @@ export const getMessages = async (req, res, next) => {
     const query = {
       conversation_id: id,
       deleted_for: { $ne: userId },
-      deleted_for_all: false,
     };
 
     if (before) {
@@ -445,14 +444,21 @@ export const getMessages = async (req, res, next) => {
       .populate('reply_to', 'content sender_id message_type created_at')
       .lean();
 
+    // Replace deleted-for-all content with tombstone — keep message in list
+    const sanitized = messages.map((m) => {
+      if (m.deleted_for_all) {
+        return { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true };
+      }
+      return { ...m, is_deleted_for_all: false };
+    });
+
     const total = await Message.countDocuments({
       conversation_id: id,
       deleted_for: { $ne: userId },
-      deleted_for_all: false,
     });
 
     return ApiResponse.ok('Messages retrieved', {
-      messages: messages.reverse(), // chronological order
+      messages: sanitized.reverse(), // chronological order
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     }).send(res);
   } catch (err) {

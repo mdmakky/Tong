@@ -38,7 +38,9 @@ export default function InfoPanel() {
 function DirectInfo({ conversation, currentUser, presenceMap }) {
   const [blockLoading, setBlockLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const { upsertConversation, removeConversation, setActiveConversation } = useChatStore()
+  const { upsertConversation, removeConversation, setActiveConversation, togglePinConversation, pinnedConversations } = useChatStore()
+
+  const isPinned = pinnedConversations.includes(conversation.id)
 
   const other =
     conversation.other_user ||
@@ -96,7 +98,7 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
       <div className="self-stretch flex justify-around mb-6">
         <ActionBtn icon={Phone} label="Voice" />
         <ActionBtn icon={Video} label="Video" />
-        <ActionBtn icon={Star} label="Pin" />
+        <ActionBtn icon={Star} label={isPinned ? 'Unpin' : 'Pin'} onClick={() => { togglePinConversation(conversation.id); toast.success(isPinned ? 'Unpinned' : 'Pinned') }} active={isPinned} />
         <ActionBtn icon={BellOff} label="Mute" />
       </div>
 
@@ -117,6 +119,11 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
       {/* Bio */}
       {other?.bio && (
         <p className="mt-3 text-sm text-text-secondary text-center px-2">{other.bio}</p>
+      )}
+
+      {/* Custom status */}
+      {other?.custom_status && (
+        <p className="mt-1 text-xs text-accent-yellow text-center px-2">"{other.custom_status}"</p>
       )}
 
       {/* Actions */}
@@ -674,13 +681,18 @@ function MediaSection({ conversationId, activeType }) {
 }
 
 // ─── Small helpers ─────────────────────────────────────────────────────────────
-function ActionBtn({ icon: Icon, label, onClick }) {
+function ActionBtn({ icon: Icon, label, onClick, active }) {
   return (
     <button
       onClick={onClick}
       className="flex flex-col items-center gap-1.5 group"
     >
-      <div className="w-11 h-11 bg-bg-elevated border border-border rounded-2xl flex items-center justify-center text-text-secondary group-hover:text-accent-yellow group-hover:border-accent-yellow/40 transition-colors">
+      <div className={clsx(
+        'w-11 h-11 border rounded-2xl flex items-center justify-center transition-colors',
+        active
+          ? 'bg-accent-yellow/10 border-accent-yellow/40 text-accent-yellow'
+          : 'bg-bg-elevated border-border text-text-secondary group-hover:text-accent-yellow group-hover:border-accent-yellow/40'
+      )}>
         <Icon className="w-5 h-5" />
       </div>
       <span className="text-[11px] text-text-muted">{label}</span>

@@ -597,7 +597,6 @@ export const getGroupMessages = async (req, res, next) => {
       conversation_id: id,
       conversation_type: 'group',
       is_deleted: false,
-      deleted_for_all: false,
       deleted_for: { $ne: req.user.id },
     })
       .sort({ created_at: -1 })
@@ -610,7 +609,15 @@ export const getGroupMessages = async (req, res, next) => {
       conversation_id: id,
       conversation_type: 'group',
       is_deleted: false,
-      deleted_for_all: false,
+      deleted_for: { $ne: req.user.id },
+    });
+
+    // Replace deleted-for-all content with tombstone
+    const sanitized = messages.map((m) => {
+      if (m.deleted_for_all) {
+        return { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true };
+      }
+      return { ...m, is_deleted_for_all: false };
     });
 
     // Update last_read_at
@@ -620,7 +627,7 @@ export const getGroupMessages = async (req, res, next) => {
     });
 
     return ApiResponse.ok('Group messages', {
-      messages: messages.reverse(),
+      messages: sanitized.reverse(),
       pagination: { page, limit, total, pages: Math.ceil(total / limit) },
     }).send(res);
   } catch (err) {

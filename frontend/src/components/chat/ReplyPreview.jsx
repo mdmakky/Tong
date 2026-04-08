@@ -3,8 +3,15 @@ import useChatStore from '@/store/chatStore'
 
 export default function ReplyPreview({ messageId, isOwn, conversationId }) {
   const { messages } = useChatStore()
-  const convMessages = messages[conversationId] || []
-  const original = convMessages.find((m) => m._id === messageId || m.id === messageId)
+
+  // messageId may be a populated object (from API) or a plain ID string
+  let original = null
+  if (messageId && typeof messageId === 'object') {
+    original = messageId
+  } else if (messageId) {
+    const convMessages = messages[conversationId] || []
+    original = convMessages.find((m) => m._id === messageId || m.id === messageId)
+  }
 
   if (!original) return null
 

@@ -8,7 +8,6 @@ import { sendOTPEmail } from '../services/email.service.js';
 import { parseUserAgent, sanitizeUser } from '../utils/helpers.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
-import env from '../config/env.js';
 
 // ─── REGISTER ──────────────────────────────────
 export const register = async (req, res, next) => {
@@ -45,7 +44,6 @@ export const register = async (req, res, next) => {
     const otp = generateOTP();
     await storeOTP('email_verify', email, otp);
     // Send email in background — don't block response
-    if (env.NODE_ENV !== 'production') console.warn(`📋 DEV OTP for ${email}: ${otp}`);
     sendOTPEmail(email, otp, 'verify').catch((err) => {
       console.error('OTP email failed:', err.message);
     });
@@ -222,7 +220,6 @@ export const forgotPassword = async (req, res, next) => {
 
     const otp = generateOTP();
     await storeOTP('password_reset', email, otp);
-    if (env.NODE_ENV !== 'production') console.warn(`📋 DEV OTP for ${email}: ${otp}`);
     sendOTPEmail(email, otp, 'reset').catch((err) => {
       console.error('Password reset email failed:', err.message);
     });
@@ -346,10 +343,7 @@ export const resendOTP = async (req, res, next) => {
     const otpType = type === 'reset' ? 'password_reset' : 'email_verify';
     const otp = generateOTP();
     await storeOTP(otpType, email, otp);
-    if (env.NODE_ENV !== 'production') console.warn(`📋 DEV OTP for ${email}: ${otp}`);
-    sendOTPEmail(email, otp, type || 'verify').catch((err) => {
-      console.error('Resend OTP email failed:', err.message);
-    });
+    sendOTPEmail(email, otp, type || 'verify').catch(console.error);
 
     return ApiResponse.ok('If the email exists, a new code has been sent.').send(res);
   } catch (err) {

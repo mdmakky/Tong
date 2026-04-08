@@ -31,6 +31,7 @@ const useChatStore = create((set, get) => ({
   searchQuery: '',
   sidebarTab: 'chats', // 'chats' | 'groups' | 'contacts'
   showInfoPanel: true,
+  pinnedConversations: JSON.parse(localStorage.getItem('pinnedConversations') || '[]'),
 
   // ─── Actions ──────────────────────────────────────────────
 
@@ -275,6 +276,16 @@ const useChatStore = create((set, get) => ({
   setSearchQuery: (q) => set({ searchQuery: q }),
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
   toggleInfoPanel: () => set((state) => ({ showInfoPanel: !state.showInfoPanel })),
+
+  togglePinConversation: (convId) => {
+    set((state) => {
+      const pinned = state.pinnedConversations.includes(convId)
+        ? state.pinnedConversations.filter((id) => id !== convId)
+        : [...state.pinnedConversations, convId]
+      localStorage.setItem('pinnedConversations', JSON.stringify(pinned))
+      return { pinnedConversations: pinned }
+    })
+  },
 
   // Update reaction on a message
   updateReaction: (convId, msgId, reactions) => {

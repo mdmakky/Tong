@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import clsx from 'clsx'
 import { getInitials } from '@/utils/helpers'
 
@@ -28,6 +29,7 @@ const STATUS_DOT_SIZE = {
 }
 
 export default function Avatar({ src, name, size = 'md', status, className }) {
+  const [imgError, setImgError] = useState(false)
   const sizeClass = SIZE_MAP[size] || SIZE_MAP.md
   const initials = getInitials(name)
 
@@ -41,11 +43,12 @@ export default function Avatar({ src, name, size = 'md', status, className }) {
 
   return (
     <div className="relative flex-shrink-0">
-      {src ? (
+      {src && !imgError ? (
         <img
           src={src}
           alt={name || 'Avatar'}
           className={clsx('avatar', sizeClass, className)}
+          onError={() => setImgError(true)}
         />
       ) : (
         <div

@@ -114,7 +114,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
       <div className={clsx('max-w-[70%] flex flex-col', isOwn ? 'items-end' : 'items-start')}>
         {/* Sender name for group chats */}
         {showAvatar && !isOwn && sender?.display_name && (
-          <span className="text-xs font-medium text-accent-yellow mb-1 ml-1">
+          <span className="text-xs font-medium text-accent-yellow mb-1 ml-3">
             {sender.display_name}
           </span>
         )}
