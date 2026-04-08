@@ -24,7 +24,11 @@ export default function Sidebar() {
   const { sidebarTab, setSidebarTab, unreadCounts } = useChatStore()
   const { user, logout } = useAuthStore()
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState('profile')
   const [showNewChat, setShowNewChat] = useState(false)
+
+  const openProfile = () => { setSettingsTab('profile'); setShowSettings(true) }
+  const openSettings = () => { setSettingsTab('appearance'); setShowSettings(true) }
 
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
 
@@ -40,8 +44,8 @@ export default function Sidebar() {
       {/* Icon nav strip */}
       <div className="w-[60px] flex-shrink-0 bg-bg-secondary flex flex-col items-center py-4 gap-1 border-r border-border">
         {/* Logo */}
-        <div className="w-10 h-10 bg-accent-yellow rounded-xl flex items-center justify-center mb-4 shadow-md shadow-accent-yellow/20">
-          <span className="text-black font-bold text-base">T</span>
+        <div className="w-10 h-10 flex items-center justify-center mb-4">
+          <img src="/tong-icon.svg" alt="tong" className="w-10 h-10" />
         </div>
 
         {/* Tab buttons */}
@@ -75,15 +79,16 @@ export default function Sidebar() {
 
         {/* Settings */}
         <button
-          onClick={() => setShowSettings(true)}
+          onClick={openSettings}
           className="w-10 h-10 flex items-center justify-center rounded-xl text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors"
+          title="Settings"
         >
           <Settings className="w-5 h-5" />
         </button>
 
         {/* User avatar */}
         <button
-          onClick={() => setShowSettings(true)}
+          onClick={openProfile}
           className="mt-2 relative"
           title={user?.display_name}
         >
@@ -115,7 +120,7 @@ export default function Sidebar() {
       </div>
 
       {/* Modals */}
-      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <UserSettingsModal initialTab={settingsTab} onClose={() => setShowSettings(false)} />}
       {showNewChat && <NewChatModal onClose={() => setShowNewChat(false)} />}
     </div>
   )

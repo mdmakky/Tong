@@ -38,7 +38,7 @@ export default function ChatLayout() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-primary">
       {/* Left sidebar — 280px fixed */}
-      <div className="w-[280px] flex-shrink-0 flex flex-col border-r border-border">
+      <div className="w-[360px] flex-shrink-0 flex flex-col border-r border-border">
         <Sidebar />
       </div>
 

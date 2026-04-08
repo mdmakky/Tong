@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { MessageCircle, Mail, ArrowLeft, Check } from 'lucide-react'
+import { Mail, ArrowLeft, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '@/lib/apiServices'
 
@@ -62,8 +62,8 @@ export default function ForgotPasswordPage() {
     <div className="auth-bg min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-accent-yellow rounded-2xl mb-4">
-            <MessageCircle className="w-7 h-7 text-black" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/tong-icon.svg" alt="tong" className="w-16 h-16" />
           </div>
           <h1 className="text-2xl font-bold text-text-primary">Reset Password</h1>
           <p className="text-text-secondary text-sm mt-1">

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, MessageCircle, Lock, Mail, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
 
@@ -45,8 +45,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-accent-yellow rounded-2xl mb-4 shadow-lg shadow-accent-yellow/20">
-            <MessageCircle className="w-7 h-7 text-black" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/tong-icon.svg" alt="tong" className="w-16 h-16" />
           </div>
           <h1 className="text-3xl font-bold text-text-primary tracking-tight">tong</h1>
           <p className="text-text-secondary text-sm mt-1">Sign in to your account</p>
