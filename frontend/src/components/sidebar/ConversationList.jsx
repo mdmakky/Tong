@@ -1,15 +1,25 @@
 import { useState } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, X, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
+import toast from 'react-hot-toast'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
+import { conversationApi } from '@/lib/apiServices'
 import { formatConvTime, truncate } from '@/utils/helpers'
 
 export default function ConversationList() {
   const [search, setSearch] = useState('')
-  const { conversations, activeConversation, setActiveConversation, unreadCounts, presenceMap } = useChatStore()
+  const [deletingId, setDeletingId] = useState(null)
+  const {
+    conversations,
+    activeConversation,
+    setActiveConversation,
+    removeConversation,
+    unreadCounts,
+    presenceMap,
+  } = useChatStore()
   const { user } = useAuthStore()
 
   const filtered = conversations.filter((conv) => {
@@ -37,6 +47,25 @@ export default function ConversationList() {
     if (msg.message_type === 'audio') return '🎤 Voice message'
     if (msg.message_type === 'file') return `📎 ${msg.content?.file_name || 'File'}`
     return truncate(msg.content?.text || '', 35)
+  }
+
+  async function handleDeleteConversation(convId, displayName) {
+    if (!convId || deletingId) return
+
+    const label = displayName || 'this user'
+    const confirmed = window.confirm(`Delete whole chat with ${label} for you?`)
+    if (!confirmed) return
+
+    setDeletingId(convId)
+    try {
+      await conversationApi.delete(convId)
+      removeConversation(convId)
+      toast.success('Conversation deleted')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete conversation')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   return (
@@ -74,45 +103,67 @@ export default function ConversationList() {
           const status = presence?.status || (other?.online_status ?? 'offline')
           const unread = unreadCounts[conv.id] || 0
           const isActive = activeConversation?.id === conv.id
+          const isDeleting = deletingId === conv.id
 
           return (
-            <button
+            <div
               key={conv.id}
-              onClick={() => setActiveConversation(conv, conv.type)}
               className={clsx(
-                'w-full flex items-center gap-3 px-3 py-3 hover:bg-surface-hover transition-colors text-left',
+                'w-full flex items-center gap-2 px-2 py-2 hover:bg-surface-hover transition-colors',
                 isActive && 'bg-surface-active'
               )}
             >
-              <Avatar
-                src={other?.avatar_url}
-                name={other?.display_name || 'User'}
-                size="md"
-                status={status}
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className={clsx(
-                    'text-sm truncate',
-                    unread > 0 ? 'font-bold text-text-primary' : 'font-medium text-text-primary'
-                  )}>
-                    {other?.display_name || 'Unknown'}
-                  </span>
-                  <span className="text-xs text-text-muted flex-shrink-0 ml-2">
-                    {formatConvTime(conv.last_message_at || conv.created_at)}
-                  </span>
+              <button
+                onClick={() => setActiveConversation(conv, conv.type)}
+                className="flex-1 min-w-0 flex items-center gap-3 px-1 py-1 text-left"
+              >
+                <Avatar
+                  src={other?.avatar_url}
+                  name={other?.display_name || 'User'}
+                  size="md"
+                  status={status}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className={clsx(
+                      'text-sm truncate',
+                      unread > 0 ? 'font-bold text-text-primary' : 'font-medium text-text-primary'
+                    )}>
+                      {other?.display_name || 'Unknown'}
+                    </span>
+                    <span className="text-xs text-text-muted flex-shrink-0 ml-2">
+                      {formatConvTime(conv.last_message_at || conv.created_at)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className={clsx(
+                      'text-xs truncate',
+                      unread > 0 ? 'text-text-primary font-semibold' : 'text-text-muted'
+                    )}>
+                      {getLastMessage(conv)}
+                    </span>
+                    {unread > 0 && <Badge count={unread} className="ml-2 flex-shrink-0" />}
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className={clsx(
-                    'text-xs truncate',
-                    unread > 0 ? 'text-text-primary font-semibold' : 'text-text-muted'
-                  )}>
-                    {getLastMessage(conv)}
-                  </span>
-                  {unread > 0 && <Badge count={unread} className="ml-2 flex-shrink-0" />}
-                </div>
-              </div>
-            </button>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteConversation(conv.id, other?.display_name)
+                }}
+                disabled={isDeleting}
+                className={clsx(
+                  'p-2 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0',
+                  isDeleting && 'opacity-50 cursor-not-allowed'
+                )}
+                title={isDeleting ? 'Deleting...' : 'Delete conversation'}
+                aria-label={isDeleting ? 'Deleting conversation' : 'Delete conversation'}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           )
         })}
       </div>
