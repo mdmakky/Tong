@@ -20,6 +20,7 @@ dist-ssr/
 *.sw?
 
 # Environment
+.env
 .env.local
 .env.production.local
 .env.development.local
