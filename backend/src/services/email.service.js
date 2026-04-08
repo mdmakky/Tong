@@ -1,14 +1,22 @@
 import { Resend } from 'resend';
 import env from '../config/env.js';
 
-const resend = new Resend(env.RESEND_API_KEY);
+const resend = env.RESEND_API_KEY ? new Resend(env.RESEND_API_KEY) : null;
 
-console.log('✅ Resend email service ready');
+if (resend) {
+  console.log('✅ Resend email service ready');
+} else {
+  console.warn('⚠️  RESEND_API_KEY not set — emails disabled, OTPs will log to console only');
+}
 
 /**
  * Send an email
  */
 const sendEmail = async ({ to, subject, html, text }) => {
+  if (!resend) {
+    throw new Error('Email service disabled (no RESEND_API_KEY)');
+  }
+
   try {
     const { data, error } = await resend.emails.send({
       from: `${env.SMTP_FROM_NAME} <${env.SMTP_FROM_EMAIL}>`,
@@ -23,7 +31,7 @@ const sendEmail = async ({ to, subject, html, text }) => {
       throw new Error(error.message);
     }
 
-    if (env.NODE_ENV === 'development') {
+    if (env.NODE_ENV !== 'production') {
       console.log('📧 Email sent:', data.id);
     }
 
