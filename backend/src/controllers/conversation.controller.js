@@ -1,5 +1,6 @@
 import { prisma } from '../config/database.js';
 import Message from '../models/Message.js';
+import ConversationVisibility from '../models/ConversationVisibility.js';
 import { getPagination } from '../utils/helpers.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
@@ -16,6 +17,16 @@ const parseMessageContent = (content) => {
     }
   }
   return content;
+};
+
+const clearHiddenConversationForUsers = async (conversationId, userIds = []) => {
+  const ids = [...new Set((userIds || []).filter(Boolean))];
+  if (ids.length === 0) return;
+
+  await ConversationVisibility.deleteMany({
+    conversation_id: conversationId,
+    user_id: { $in: ids },
+  });
 };
 
 // ─── GET ALL CONVERSATIONS ─────────────────────
@@ -40,6 +51,19 @@ export const getConversations = async (req, res, next) => {
       },
       orderBy: { updated_at: 'desc' },
     });
+
+    const conversationIds = conversations.map((conv) => conv.id);
+    const hiddenEntries = conversationIds.length > 0
+      ? await ConversationVisibility.find({
+          user_id: userId,
+          conversation_id: { $in: conversationIds },
+        })
+          .select('conversation_id')
+          .lean()
+      : [];
+    const hiddenConversationIds = new Set(
+      hiddenEntries.map((entry) => entry.conversation_id)
+    );
 
     // Batch-fetch friend requests (avoids N+1 across all conversations)
     const participantIds = conversations.map((conv) =>
@@ -109,7 +133,7 @@ export const getConversations = async (req, res, next) => {
     );
 
     const visibleConversations = enriched
-      .filter((conv) => !conv._hidden_for_user)
+      .filter((conv) => !conv._hidden_for_user && !hiddenConversationIds.has(conv.id))
       .map(({ _hidden_for_user, ...conv }) => conv);
 
     // Sort by last message time
@@ -171,6 +195,11 @@ export const createConversation = async (req, res, next) => {
     });
 
     if (existing) {
+      await ConversationVisibility.deleteOne({
+        conversation_id: existing.id,
+        user_id: userId,
+      });
+
       return ApiResponse.ok('Conversation already exists', existing).send(res);
     }
 
@@ -286,11 +315,19 @@ export const deleteConversation = async (req, res, next) => {
 
     if (!conversation) throw ApiError.notFound('Conversation not found');
 
-    // Soft delete — mark messages as deleted for this user
-    await Message.updateMany(
-      { conversation_id: id },
-      { $addToSet: { deleted_for: userId } }
-    );
+    await Promise.all([
+      // Soft delete messages for this user
+      Message.updateMany(
+        { conversation_id: id },
+        { $addToSet: { deleted_for: userId } }
+      ),
+      // Persist hidden state so even empty conversations stay deleted for this user
+      ConversationVisibility.updateOne(
+        { conversation_id: id, user_id: userId },
+        { $set: { hidden_at: new Date() } },
+        { upsert: true }
+      ),
+    ]);
 
     return ApiResponse.ok('Conversation deleted for you').send(res);
   } catch (err) {
@@ -354,6 +391,7 @@ export const declineFriendRequest = async (req, res, next) => {
     });
 
     await prisma.conversation.delete({ where: { id: convId } });
+    await ConversationVisibility.deleteMany({ conversation_id: convId });
 
     // Notify requester the request was declined
     const io = req.app.get('io');
@@ -473,11 +511,16 @@ export const sendMessage = async (req, res, next) => {
 
     const message = await Message.create(messageData);
 
-    // Update conversation timestamp
-    await prisma.conversation.update({
-      where: { id },
-      data: { updated_at: new Date() },
-    });
+    await Promise.all([
+      prisma.conversation.update({
+        where: { id },
+        data: { updated_at: new Date() },
+      }),
+      clearHiddenConversationForUsers(id, [
+        conversation.participant_1,
+        conversation.participant_2,
+      ]),
+    ]);
 
     // Populate reply_to for response
     const populated = await Message.findById(message._id)

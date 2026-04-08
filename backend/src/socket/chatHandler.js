@@ -1,4 +1,5 @@
 import Message from '../models/Message.js';
+import ConversationVisibility from '../models/ConversationVisibility.js';
 import { prisma } from '../config/database.js';
 
 /**
@@ -6,6 +7,16 @@ import { prisma } from '../config/database.js';
  */
 const chatHandler = (io, socket) => {
   const userId = socket.user.id;
+
+  const clearHiddenConversationForUsers = async (conversationId, userIds = []) => {
+    const ids = [...new Set((userIds || []).filter(Boolean))];
+    if (ids.length === 0) return;
+
+    await ConversationVisibility.deleteMany({
+      conversation_id: conversationId,
+      user_id: { $in: ids },
+    });
+  };
 
   const getDirectConversation = async (conversationId, includeBlocked = true) => {
     const where = {
@@ -166,10 +177,16 @@ const chatHandler = (io, socket) => {
 
       // Update conversation timestamp (for direct chats)
       if (access.type !== 'group') {
-        prisma.conversation.update({
-          where: { id: conversation_id },
-          data: { updated_at: new Date() },
-        }).catch(() => {});
+        Promise.all([
+          prisma.conversation.update({
+            where: { id: conversation_id },
+            data: { updated_at: new Date() },
+          }),
+          clearHiddenConversationForUsers(conversation_id, [
+            access.conversation.participant_1,
+            access.conversation.participant_2,
+          ]),
+        ]).catch(() => {});
       }
 
       callback?.({ success: true, message: populated });
