@@ -25,8 +25,11 @@ const env = {
     .filter(Boolean),
   REDIS_URL: process.env.REDIS_URL,
 
-  // Email (Resend)
-  RESEND_API_KEY: process.env.RESEND_API_KEY,
+  // SMTP (Gmail)
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: parseInt(process.env.SMTP_PORT, 10) || 587,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASSWORD: process.env.SMTP_PASSWORD,
   SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL,
   SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || 'Tong Messenger',
 
