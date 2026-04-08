@@ -7,9 +7,13 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "build": "npx prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "keywords": ["tong", "messaging", "chat", "real-time"],
   "author": "tong-er-dokan",

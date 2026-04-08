@@ -18,7 +18,7 @@ const STATUS_OPTIONS = [
   { value: 'invisible', label: 'Invisible', color: 'bg-text-muted' },
 ]
 
-export default function UserSettingsModal({ onClose }) {
+export default function UserSettingsModal({ onClose, initialTab = 'profile' }) {
   const { user, logout, updateUser } = useAuthStore()
   const fileInputRef = useRef(null)
 
@@ -31,7 +31,7 @@ export default function UserSettingsModal({ onClose }) {
   })
   const [saving, setSaving] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [activeTab, setActiveTab] = useState('profile')
+  const [activeTab, setActiveTab] = useState(initialTab)
 
   const handleSave = async () => {
     setSaving(true)
