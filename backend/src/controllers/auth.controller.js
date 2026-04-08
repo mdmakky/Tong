@@ -46,6 +46,7 @@ export const register = async (req, res, next) => {
     // Send email in background — don't block response
     sendOTPEmail(email, otp, 'verify').catch((err) => {
       console.error('OTP email failed:', err.message);
+      console.warn(`📋 DEV OTP for ${email}: ${otp}`);
     });
 
     // Generate tokens
@@ -222,6 +223,7 @@ export const forgotPassword = async (req, res, next) => {
     await storeOTP('password_reset', email, otp);
     sendOTPEmail(email, otp, 'reset').catch((err) => {
       console.error('Password reset email failed:', err.message);
+      console.warn(`📋 DEV OTP for ${email}: ${otp}`);
     });
 
     return ApiResponse.ok('If the email exists, a reset code has been sent.').send(res);
@@ -343,7 +345,10 @@ export const resendOTP = async (req, res, next) => {
     const otpType = type === 'reset' ? 'password_reset' : 'email_verify';
     const otp = generateOTP();
     await storeOTP(otpType, email, otp);
-    sendOTPEmail(email, otp, type || 'verify').catch(console.error);
+    sendOTPEmail(email, otp, type || 'verify').catch((err) => {
+      console.error('Resend OTP email failed:', err.message);
+      console.warn(`📋 DEV OTP for ${email}: ${otp}`);
+    });
 
     return ApiResponse.ok('If the email exists, a new code has been sent.').send(res);
   } catch (err) {
