@@ -15,12 +15,16 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["tong", "messaging", "chat", "real-time"],
+  "keywords": [
+    "tong",
+    "messaging",
+    "chat",
+    "real-time"
+  ],
   "author": "tong-er-dokan",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "5.22.0",
-    "prisma": "5.22.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
     "cors": "^2.8.5",
@@ -38,7 +42,9 @@
     "multer": "^1.4.5-lts.1",
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^6.9.16",
+    "prisma": "5.22.0",
     "qrcode": "^1.5.4",
+    "resend": "^6.10.0",
     "socket.io": "^4.8.1",
     "speakeasy": "^2.0.0",
     "uuid": "^11.1.0",

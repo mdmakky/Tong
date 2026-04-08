@@ -1,42 +1,33 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import env from '../config/env.js';
 
-// Create reusable transporter — Gmail SMTP with App Password
-const transporter = nodemailer.createTransport({
-  host: env.SMTP_HOST,
-  port: env.SMTP_PORT,
-  secure: env.SMTP_PORT === 465, // true for 465, false for other ports
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASSWORD,
-  },
-});
+const resend = new Resend(env.RESEND_API_KEY);
 
-// Verify connection on startup (non-blocking)
-transporter.verify().then(() => {
-  console.log('✅ SMTP email service ready');
-}).catch((err) => {
-  console.warn('⚠️  SMTP not ready:', err.message, '— emails may fail');
-});
+console.log('✅ Resend email service ready');
 
 /**
  * Send an email
  */
 const sendEmail = async ({ to, subject, html, text }) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"${env.SMTP_FROM_NAME}" <${env.SMTP_FROM_EMAIL}>`,
+    const { data, error } = await resend.emails.send({
+      from: `${env.SMTP_FROM_NAME} <${env.SMTP_FROM_EMAIL}>`,
       to,
       subject,
       html,
       text,
     });
 
-    if (env.NODE_ENV === 'development') {
-      console.log('📧 Email sent:', info.messageId);
+    if (error) {
+      console.error('❌ Email send error:', error.message);
+      throw new Error(error.message);
     }
 
-    return info;
+    if (env.NODE_ENV === 'development') {
+      console.log('📧 Email sent:', data.id);
+    }
+
+    return data;
   } catch (err) {
     console.error('❌ Email send error:', err.message);
     throw err;
