@@ -59,6 +59,7 @@ router.post('/:id/leave', groupCtrl.leaveGroup);
 // ─── MESSAGES ──────────────────────────────────
 router.get('/:id/messages', groupCtrl.getGroupMessages);
 router.post('/:id/messages', uploadChatMedia, groupCtrl.sendGroupMessage);
+router.get('/:id/media', groupCtrl.getGroupMedia);
 
 // ─── POLLS ─────────────────────────────────────
 router.post(

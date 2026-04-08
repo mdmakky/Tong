@@ -19,6 +19,10 @@ const env = {
   // Databases
   DATABASE_URL: process.env.DATABASE_URL,
   MONGODB_URI: process.env.MONGODB_URI,
+  MONGODB_DNS_SERVERS: (process.env.MONGODB_DNS_SERVERS || '8.8.8.8,1.1.1.1')
+    .split(',')
+    .map((server) => server.trim())
+    .filter(Boolean),
   REDIS_URL: process.env.REDIS_URL,
 
   // SMTP

@@ -5,6 +5,13 @@ import { prisma } from '../config/database.js';
  */
 const groupHandler = (io, socket) => {
   const userId = socket.user.id;
+  const getMembership = (groupId) =>
+    prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: { role: true },
+    });
+
+  const canManageMembers = (role) => ['owner', 'admin'].includes(role);
 
   // ─── JOIN GROUP ROOM ─────────────────────────
   socket.on('join_group', async ({ group_id }) => {
@@ -30,22 +37,40 @@ const groupHandler = (io, socket) => {
 
   // ─── Emit group update to all members ────────
   socket.on('group_update', async ({ group_id, changes }) => {
-    io.to(`conv:${group_id}`).emit('group_updated', {
-      group_id,
-      changes,
-      updated_by: userId,
-    });
+    try {
+      const membership = await getMembership(group_id);
+      if (!membership || !canManageMembers(membership.role)) return;
+
+      io.to(`conv:${group_id}`).emit('group_updated', {
+        group_id,
+        changes,
+        updated_by: userId,
+      });
+    } catch (err) {
+      console.error('group_update error:', err.message);
+    }
   });
 
   // ─── Member joined notification ──────────────
   socket.on('member_added', async ({ group_id, user_id: newUserId }) => {
     try {
+      const membership = await getMembership(group_id);
+      if (!membership || !canManageMembers(membership.role)) return;
+
       const user = await prisma.user.findUnique({
         where: { id: newUserId },
         select: { id: true, username: true, display_name: true, avatar_url: true },
       });
 
-      if (user) {
+      const group = await prisma.group.findUnique({
+        where: { id: group_id },
+        include: {
+          owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+          _count: { select: { members: true } },
+        },
+      });
+
+      if (user && group) {
         io.to(`conv:${group_id}`).emit('member_joined', {
           group_id,
           user,
@@ -55,7 +80,10 @@ const groupHandler = (io, socket) => {
         // Notify the new member
         io.to(`user:${newUserId}`).emit('new_conversation', {
           type: 'group',
-          group_id,
+          group: {
+            ...group,
+            my_role: 'member',
+          },
         });
       }
     } catch (err) {
@@ -64,15 +92,22 @@ const groupHandler = (io, socket) => {
   });
 
   // ─── Member left/removed notification ────────
-  socket.on('member_removed', ({ group_id, user_id: removedUserId }) => {
-    io.to(`conv:${group_id}`).emit('member_left', {
-      group_id,
-      user_id: removedUserId,
-      removed_by: userId,
-    });
+  socket.on('member_removed', async ({ group_id, user_id: removedUserId }) => {
+    try {
+      const membership = await getMembership(group_id);
+      if (!membership || !canManageMembers(membership.role)) return;
 
-    // Notify the removed member
-    io.to(`user:${removedUserId}`).emit('removed_from_group', { group_id });
+      io.to(`conv:${group_id}`).emit('member_left', {
+        group_id,
+        user_id: removedUserId,
+        removed_by: userId,
+      });
+
+      // Notify the removed member
+      io.to(`user:${removedUserId}`).emit('removed_from_group', { group_id });
+    } catch (err) {
+      console.error('member_removed error:', err.message);
+    }
   });
 
   // ─── Auto-join all user's groups on connect ──

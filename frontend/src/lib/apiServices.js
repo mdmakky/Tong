@@ -63,10 +63,13 @@ export const groupApi = {
   removeMember: (id, userId) => api.delete(`/groups/${id}/members/${userId}`),
   updateRole: (id, userId, role) =>
     api.put(`/groups/${id}/members/${userId}/role`, { role }),
+  muteMember: (id, userId, duration) =>
+    api.post(`/groups/${id}/members/${userId}/mute`, { duration }),
   join: (inviteLink) => api.post(`/groups/join/${inviteLink}`),
   leave: (id) => api.post(`/groups/${id}/leave`),
   getMessages: (id, params) => api.get(`/groups/${id}/messages`, { params }),
   sendMessage: (id, data) => api.post(`/groups/${id}/messages`, data),
+  getMedia: (id, params) => api.get(`/groups/${id}/media`, { params }),
   uploadAvatar: (id, file) => {
     const form = new FormData()
     form.append('avatar', file)

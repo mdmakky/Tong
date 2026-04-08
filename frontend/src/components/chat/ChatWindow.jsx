@@ -69,10 +69,16 @@ export default function ChatWindow() {
   // useSocketEvents can deliver new_message events for every conversation.
   useEffect(() => {
     if (!convId || !socket) return
-    socket.emit('join_conversation', { conversation_id: convId })
-    socket.emit('message_read', { conversation_id: convId })
+    socket.emit('join_conversation', {
+      conversation_id: convId,
+      conversation_type: activeType,
+    })
+    socket.emit('message_read', {
+      conversation_id: convId,
+      conversation_type: activeType,
+    })
     clearUnread(convId)
-  }, [convId, socket])
+  }, [convId, socket, activeType])
 
   const loadOlderMessages = useCallback(async () => {
     if (!hasMore[convId] || loadingOlder) return

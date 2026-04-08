@@ -55,7 +55,16 @@ const useChatStore = create((set, get) => ({
       conversations: state.conversations.filter((c) => c.id !== convId),
     })),
 
-  setConversations: (convs) => set({ conversations: convs }),
+  setConversations: (convs) =>
+    set((state) => {
+      const unreadFromApi = Object.fromEntries(
+        (convs || []).map((c) => [c.id, c.unread_count || 0])
+      )
+      return {
+        conversations: convs,
+        unreadCounts: { ...state.unreadCounts, ...unreadFromApi },
+      }
+    }),
 
   upsertConversation: (conv) => {
     set((state) => {
@@ -72,17 +81,48 @@ const useChatStore = create((set, get) => ({
     })
   },
 
-  setGroups: (groups) => set({ groups }),
+  setGroups: (groups) =>
+    set((state) => {
+      const unreadFromApi = Object.fromEntries(
+        (groups || []).map((g) => [g.id, g.unread_count || 0])
+      )
+      return {
+        groups,
+        unreadCounts: { ...state.unreadCounts, ...unreadFromApi },
+      }
+    }),
 
   upsertGroup: (group) => {
     set((state) => {
       const exists = state.groups.find((g) => g.id === group.id)
-      if (exists) {
-        return { groups: state.groups.map((g) => (g.id === group.id ? { ...g, ...group } : g)) }
-      }
-      return { groups: [group, ...state.groups] }
+      const newGroups = exists
+        ? state.groups.map((g) => (g.id === group.id ? { ...g, ...group } : g))
+        : [group, ...state.groups]
+
+      const newActive =
+        state.activeType === 'group' && state.activeConversation?.id === group.id
+          ? { ...state.activeConversation, ...group }
+          : state.activeConversation
+
+      return { groups: newGroups, activeConversation: newActive }
     })
   },
+
+  removeGroup: (groupId) =>
+    set((state) => ({
+      groups: state.groups.filter((g) => g.id !== groupId),
+      messages: Object.fromEntries(
+        Object.entries(state.messages).filter(([convId]) => convId !== groupId)
+      ),
+      activeConversation:
+        state.activeType === 'group' && state.activeConversation?.id === groupId
+          ? null
+          : state.activeConversation,
+      activeType:
+        state.activeType === 'group' && state.activeConversation?.id === groupId
+          ? null
+          : state.activeType,
+    })),
 
   // Messages
   setMessages: (convId, msgs, append = false) => {

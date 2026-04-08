@@ -4,6 +4,20 @@ import { getPagination } from '../utils/helpers.js';
 import ApiError from '../utils/ApiError.js';
 import ApiResponse from '../utils/ApiResponse.js';
 
+const parseMessageContent = (content) => {
+  if (content === undefined || content === null || content === '') return {};
+  if (typeof content === 'string') {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object') return parsed;
+      return { text: content };
+    } catch (_) {
+      return { text: content };
+    }
+  }
+  return content;
+};
+
 // ─── GET ALL CONVERSATIONS ─────────────────────
 export const getConversations = async (req, res, next) => {
   try {
@@ -349,6 +363,8 @@ export const getMessages = async (req, res, next) => {
     const userId = req.user.id;
     const { page, limit, skip } = getPagination(req.query.page, req.query.limit);
     const { before } = req.query; // cursor-based: pass last message _id
+    const offsetParam = Number(req.query.offset);
+    const effectiveSkip = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : skip;
 
     // Verify user is participant
     const conversation = await prisma.conversation.findFirst({
@@ -375,7 +391,7 @@ export const getMessages = async (req, res, next) => {
 
     const messages = await Message.find(query)
       .sort({ created_at: -1 })
-      .skip(before ? 0 : skip)
+      .skip(before ? 0 : effectiveSkip)
       .limit(limit)
       .populate('reply_to', 'content sender_id message_type created_at')
       .lean();
@@ -417,7 +433,7 @@ export const sendMessage = async (req, res, next) => {
     if (conversation.is_blocked) throw ApiError.forbidden('Conversation is blocked');
 
     // Handle file upload
-    let messageContent = content || {};
+    let messageContent = parseMessageContent(content);
     if (req.file) {
       messageContent.media_url = req.file.path || req.file.secure_url || req.file.url;
       messageContent.media_type = req.file.mimetype;
@@ -427,7 +443,7 @@ export const sendMessage = async (req, res, next) => {
 
     const messageData = {
       conversation_id: id,
-      conversation_type: conversation.type,
+      conversation_type: conversation.type === 'private_encrypted' ? 'private' : 'direct',
       sender_id: userId,
       message_type: message_type || 'text',
       content: messageContent,
@@ -456,6 +472,18 @@ export const sendMessage = async (req, res, next) => {
     const populated = await Message.findById(message._id)
       .populate('reply_to', 'content sender_id message_type')
       .lean();
+
+    populated.sender = {
+      id: req.user.id,
+      username: req.user.username,
+      display_name: req.user.display_name,
+      avatar_url: req.user.avatar_url,
+    };
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conv:${id}`).emit('new_message', populated);
+    }
 
     return ApiResponse.created('Message sent', populated).send(res);
   } catch (err) {

@@ -7,10 +7,77 @@ import { prisma } from '../config/database.js';
 const chatHandler = (io, socket) => {
   const userId = socket.user.id;
 
+  const getDirectConversation = async (conversationId, includeBlocked = true) => {
+    const where = {
+      id: conversationId,
+      OR: [{ participant_1: userId }, { participant_2: userId }],
+    };
+
+    if (!includeBlocked) where.is_blocked = false;
+
+    return prisma.conversation.findFirst({
+      where,
+      select: {
+        id: true,
+        type: true,
+        participant_1: true,
+        participant_2: true,
+        is_blocked: true,
+      },
+    });
+  };
+
+  const getGroupMembership = async (groupId) => {
+    return prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: groupId, user_id: userId } },
+      select: {
+        group_id: true,
+        role: true,
+        muted_until: true,
+      },
+    });
+  };
+
+  const resolveConversationAccess = async (conversationId, hintedType = null, options = {}) => {
+    if (!conversationId) return null;
+
+    const { includeBlocked = true } = options;
+
+    if (hintedType === 'group') {
+      const member = await getGroupMembership(conversationId);
+      if (!member) return null;
+      return { type: 'group', member };
+    }
+
+    if (hintedType && hintedType !== 'group') {
+      const conversation = await getDirectConversation(conversationId, includeBlocked);
+      if (!conversation) return null;
+      return { type: 'direct', conversation };
+    }
+
+    const conversation = await getDirectConversation(conversationId, includeBlocked);
+    if (conversation) return { type: 'direct', conversation };
+
+    const member = await getGroupMembership(conversationId);
+    if (member) return { type: 'group', member };
+
+    return null;
+  };
+
   // ─── JOIN CONVERSATION ───────────────────────
-  socket.on('join_conversation', ({ conversation_id }) => {
-    socket.join(`conv:${conversation_id}`);
-    console.log(`${socket.user.display_name} joined conv:${conversation_id}`);
+  socket.on('join_conversation', async ({ conversation_id, conversation_type }) => {
+    if (!conversation_id) return;
+
+    try {
+      const hintedType = conversation_type === 'group' ? 'group' : null;
+      const access = await resolveConversationAccess(conversation_id, hintedType);
+      if (!access) return;
+
+      socket.join(`conv:${conversation_id}`);
+      console.log(`${socket.user.display_name} joined conv:${conversation_id}`);
+    } catch (err) {
+      console.error('join_conversation error:', err.message);
+    }
   });
 
   // ─── LEAVE CONVERSATION ──────────────────────
@@ -28,18 +95,27 @@ const chatHandler = (io, socket) => {
         return callback?.({ error: 'conversation_id and content required' });
       }
 
-      // Block check + friend request gate (direct chats only)
-      if ((conversation_type || 'direct') !== 'group') {
-        const convCheck = await prisma.conversation.findFirst({
-          where: { id: conversation_id, is_blocked: false },
-          select: { participant_1: true, participant_2: true },
-        });
-        if (!convCheck) {
-          return callback?.({ error: 'Conversation not found or blocked' });
+      const hintedType = conversation_type === 'group' ? 'group' : 'direct';
+      const access = await resolveConversationAccess(conversation_id, hintedType, {
+        includeBlocked: false,
+      });
+
+      if (!access) {
+        return callback?.({ error: 'Conversation not found or access denied' });
+      }
+
+      // Group moderation checks
+      if (access.type === 'group') {
+        if (access.member?.muted_until && new Date(access.member.muted_until) > new Date()) {
+          return callback?.({ error: 'You are muted in this group' });
         }
-        const otherCheckUid = convCheck.participant_1 === userId
-          ? convCheck.participant_2
-          : convCheck.participant_1;
+      }
+
+      // Friend request gate (direct chats only)
+      if (access.type !== 'group') {
+        const otherCheckUid = access.conversation.participant_1 === userId
+          ? access.conversation.participant_2
+          : access.conversation.participant_1;
         const pendingReq = await prisma.friendRequest.findFirst({
           where: { sender_id: otherCheckUid, receiver_id: userId, status: 'pending' },
         });
@@ -51,7 +127,12 @@ const chatHandler = (io, socket) => {
       // Build message data
       const messageData = {
         conversation_id,
-        conversation_type: conversation_type || 'direct',
+        conversation_type:
+          access.type === 'group'
+            ? 'group'
+            : access.conversation.type === 'private_encrypted'
+              ? 'private'
+              : 'direct',
         sender_id: userId,
         message_type: message_type || 'text',
         content: typeof content === 'string' ? { text: content } : content,
@@ -84,7 +165,7 @@ const chatHandler = (io, socket) => {
       socket.to(`conv:${conversation_id}`).emit('new_message', populated);
 
       // Update conversation timestamp (for direct chats)
-      if (conversation_type !== 'group') {
+      if (access.type !== 'group') {
         prisma.conversation.update({
           where: { id: conversation_id },
           data: { updated_at: new Date() },
@@ -100,6 +181,7 @@ const chatHandler = (io, socket) => {
 
   // ─── TYPING START ────────────────────────────
   socket.on('typing_start', ({ conversation_id }) => {
+    if (!conversation_id) return;
     socket.to(`conv:${conversation_id}`).emit('user_typing', {
       user_id: userId,
       username: socket.user.username,
@@ -110,6 +192,7 @@ const chatHandler = (io, socket) => {
 
   // ─── TYPING STOP ─────────────────────────────
   socket.on('typing_stop', ({ conversation_id }) => {
+    if (!conversation_id) return;
     socket.to(`conv:${conversation_id}`).emit('user_stopped_typing', {
       user_id: userId,
       conversation_id,
@@ -117,19 +200,55 @@ const chatHandler = (io, socket) => {
   });
 
   // ─── MESSAGE READ ────────────────────────────
-  socket.on('message_read', async ({ message_id, conversation_id }) => {
+  socket.on('message_read', async ({ message_id, conversation_id, conversation_type }) => {
     try {
-      await Message.findByIdAndUpdate(message_id, {
-        $addToSet: {
-          read_receipts: { user_id: userId, read_at: new Date() },
-        },
-      });
+      if (!conversation_id && !message_id) return;
 
-      socket.to(`conv:${conversation_id}`).emit('message_read', {
-        message_id,
-        user_id: userId,
-        read_at: new Date(),
-      });
+      let targetConversationId = conversation_id;
+      let targetConversationType = conversation_type || null;
+
+      // Resolve conversation from message when only message_id is provided
+      if (!targetConversationId && message_id) {
+        const msg = await Message.findById(message_id)
+          .select('conversation_id conversation_type')
+          .lean();
+
+        if (!msg) return;
+        targetConversationId = msg.conversation_id;
+        targetConversationType = msg.conversation_type;
+      }
+
+      const access = await resolveConversationAccess(targetConversationId, targetConversationType);
+      if (!access) return;
+
+      // Mark one message as read
+      if (message_id) {
+        await Message.findOneAndUpdate(
+          { _id: message_id, conversation_id: targetConversationId },
+          {
+            $addToSet: {
+              read_receipts: { user_id: userId, read_at: new Date() },
+            },
+          }
+        );
+
+        socket.to(`conv:${targetConversationId}`).emit('message_read', {
+          message_id,
+          conversation_id: targetConversationId,
+          user_id: userId,
+          read_at: new Date(),
+        });
+      }
+
+      // Track member read state in group chats when a conversation is opened
+      if (access.type === 'group') {
+        await prisma.groupMember.update({
+          where: {
+            group_id_user_id: { group_id: targetConversationId, user_id: userId },
+          },
+          data: { last_read_at: new Date() },
+        });
+      }
     } catch (err) {
       console.error('message_read error:', err.message);
     }
@@ -138,18 +257,24 @@ const chatHandler = (io, socket) => {
   // ─── MARK DELIVERED ──────────────────────────
   socket.on('mark_delivered', async ({ message_id }) => {
     try {
-      const message = await Message.findByIdAndUpdate(
-        message_id,
-        { $addToSet: { delivered_to: userId } },
-        { new: true }
-      );
+      const message = await Message.findById(message_id);
+      if (!message) return;
 
-      if (message) {
-        socket.to(`conv:${message.conversation_id}`).emit('message_delivered', {
-          message_id,
-          user_id: userId,
-        });
-      }
+      const access = await resolveConversationAccess(
+        message.conversation_id,
+        message.conversation_type
+      );
+      if (!access) return;
+
+      await Message.findByIdAndUpdate(message_id, {
+        $addToSet: { delivered_to: userId },
+      });
+
+      socket.to(`conv:${message.conversation_id}`).emit('message_delivered', {
+        message_id,
+        conversation_id: message.conversation_id,
+        user_id: userId,
+      });
     } catch (err) {
       console.error('mark_delivered error:', err.message);
     }
@@ -160,6 +285,12 @@ const chatHandler = (io, socket) => {
     try {
       const message = await Message.findById(message_id);
       if (!message) return;
+
+      const access = await resolveConversationAccess(
+        message.conversation_id,
+        message.conversation_type
+      );
+      if (!access) return;
 
       // Remove existing reaction from this user
       message.reactions = message.reactions.filter((r) => r.user_id !== userId);
@@ -186,11 +317,18 @@ const chatHandler = (io, socket) => {
       const message = await Message.findById(message_id);
       if (!message) return;
 
+      const access = await resolveConversationAccess(
+        message.conversation_id,
+        message.conversation_type
+      );
+      if (!access) return;
+
       message.is_pinned = !message.is_pinned;
       await message.save();
 
-      io.to(`conv:${conversation_id}`).emit('message_pinned', {
+      io.to(`conv:${message.conversation_id}`).emit('message_pinned', {
         message_id,
+        conversation_id: message.conversation_id,
         is_pinned: message.is_pinned,
         pinned_by: userId,
       });
@@ -204,6 +342,12 @@ const chatHandler = (io, socket) => {
     try {
       const message = await Message.findById(message_id);
       if (!message) return;
+
+      const access = await resolveConversationAccess(
+        message.conversation_id,
+        message.conversation_type
+      );
+      if (!access) return;
 
       if (for_all && message.sender_id === userId) {
         message.deleted_for_all = true;
@@ -219,11 +363,13 @@ const chatHandler = (io, socket) => {
       if (for_all) {
         io.to(`conv:${message.conversation_id}`).emit('message_deleted', {
           message_id,
+          conversation_id: message.conversation_id,
           deleted_for_all: true,
         });
       } else {
         socket.emit('message_deleted', {
           message_id,
+          conversation_id: message.conversation_id,
           deleted_for_all: false,
         });
       }
@@ -236,16 +382,23 @@ const chatHandler = (io, socket) => {
   socket.on('edit_message', async ({ message_id, text }) => {
     try {
       const message = await Message.findById(message_id);
-      if (!message || message.sender_id !== userId) return;
+      if (!message || message.sender_id !== userId || !text?.trim()) return;
 
-      message.edit_history.push({ content: message.content.text, edited_at: new Date() });
-      message.content.text = text;
+      const access = await resolveConversationAccess(
+        message.conversation_id,
+        message.conversation_type
+      );
+      if (!access) return;
+
+      message.edit_history.push({ content: message.content?.text || '', edited_at: new Date() });
+      message.content.text = text.trim();
       message.is_edited = true;
       await message.save();
 
       io.to(`conv:${message.conversation_id}`).emit('message_edited', {
         message_id,
-        new_content: { text },
+        conversation_id: message.conversation_id,
+        new_content: { text: text.trim() },
         is_edited: true,
       });
     } catch (err) {

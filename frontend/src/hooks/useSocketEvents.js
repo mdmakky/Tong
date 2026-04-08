@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
+import { groupApi } from '@/lib/apiServices'
 
 /**
  * Connects all Socket.io server→client events to Zustand store.
@@ -21,6 +22,7 @@ export default function useSocketEvents() {
     upsertConversation,
     upsertGroup,
     removeConversation,
+    removeGroup,
     incrementUnread,
   } = useChatStore()
 
@@ -34,11 +36,20 @@ export default function useSocketEvents() {
       const convId = message.conversation_id
       appendMessage(convId, message)
       incrementUnread(convId)
-      upsertConversation({
-        id: convId,
-        last_message: message,
-        last_message_at: message.created_at,
-      })
+
+      if (message.conversation_type === 'group') {
+        upsertGroup({
+          id: convId,
+          last_message: message,
+          last_message_at: message.created_at,
+        })
+      } else {
+        upsertConversation({
+          id: convId,
+          last_message: message,
+          last_message_at: message.created_at,
+        })
+      }
     }
 
     // ─── Message delivered ───
@@ -80,9 +91,40 @@ export default function useSocketEvents() {
     }
 
     // ─── New conversation ───
-    const onNewConversation = (conv) => {
-      upsertConversation(conv)
-      socket.emit('join_conversation', { conversation_id: conv.id })
+    const onNewConversation = async (payload) => {
+      if (!payload) return
+
+      if (payload.type === 'group') {
+        if (payload.group?.id) {
+          upsertGroup(payload.group)
+          socket.emit('join_conversation', {
+            conversation_id: payload.group.id,
+            conversation_type: 'group',
+          })
+          return
+        }
+
+        if (payload.group_id) {
+          try {
+            const { data } = await groupApi.get(payload.group_id)
+            const group = data?.data
+            if (!group?.id) return
+            upsertGroup(group)
+            socket.emit('join_conversation', {
+              conversation_id: group.id,
+              conversation_type: 'group',
+            })
+          } catch (_) {}
+          return
+        }
+      }
+
+      if (!payload.id) return
+      upsertConversation(payload)
+      socket.emit('join_conversation', {
+        conversation_id: payload.id,
+        conversation_type: payload.type,
+      })
     }
 
     // ─── Friend request accepted (requester notified) ───
@@ -100,6 +142,49 @@ export default function useSocketEvents() {
       upsertGroup({ id: group_id, ...changes })
     }
 
+    const onMemberJoined = ({ group_id }) => {
+      if (!group_id) return
+      groupApi
+        .get(group_id)
+        .then((r) => {
+          const group = r.data?.data
+          if (group?.id) upsertGroup(group)
+        })
+        .catch(() => {})
+    }
+
+    const onMemberLeft = ({ group_id }) => {
+      if (!group_id) return
+      groupApi
+        .get(group_id)
+        .then((r) => {
+          const group = r.data?.data
+          if (group?.id) upsertGroup(group)
+        })
+        .catch(() => {})
+    }
+
+    const onMemberRoleUpdated = ({ group_id }) => {
+      if (!group_id) return
+      groupApi
+        .get(group_id)
+        .then((r) => {
+          const group = r.data?.data
+          if (group?.id) upsertGroup(group)
+        })
+        .catch(() => {})
+    }
+
+    const onRemovedFromGroup = ({ group_id }) => {
+      if (!group_id) return
+      removeGroup(group_id)
+    }
+
+    const onGroupDeleted = ({ group_id }) => {
+      if (!group_id) return
+      removeGroup(group_id)
+    }
+
     socket.on('new_message', onNewMessage)
     socket.on('message_delivered', onDelivered)
     socket.on('message_read', onRead)
@@ -113,6 +198,11 @@ export default function useSocketEvents() {
     socket.on('friend_request_accepted', onRequestAccepted)
     socket.on('friend_request_declined', onRequestDeclined)
     socket.on('group_updated', onGroupUpdated)
+    socket.on('member_joined', onMemberJoined)
+    socket.on('member_left', onMemberLeft)
+    socket.on('member_role_updated', onMemberRoleUpdated)
+    socket.on('removed_from_group', onRemovedFromGroup)
+    socket.on('group_deleted', onGroupDeleted)
 
     return () => {
       socket.off('new_message', onNewMessage)
@@ -128,6 +218,11 @@ export default function useSocketEvents() {
       socket.off('friend_request_accepted', onRequestAccepted)
       socket.off('friend_request_declined', onRequestDeclined)
       socket.off('group_updated', onGroupUpdated)
+      socket.off('member_joined', onMemberJoined)
+      socket.off('member_left', onMemberLeft)
+      socket.off('member_role_updated', onMemberRoleUpdated)
+      socket.off('removed_from_group', onRemovedFromGroup)
+      socket.off('group_deleted', onGroupDeleted)
     }
   }, [socket])
 }

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
+import dns from 'dns';
 import env from './env.js';
 
 const shouldFailOnDbError = env.NODE_ENV === 'production';
@@ -21,12 +22,50 @@ export const prisma = new PrismaClient({
 });
 
 // ─── MongoDB ───────────────────────────────────
+const isSrvDnsError = (err) =>
+  /querySrv\s+ECONNREFUSED/i.test(err?.message || '') ||
+  /ENOTFOUND|EAI_AGAIN|ETIMEOUT/i.test(err?.message || '');
+
+const shouldUseCustomMongoDns = () =>
+  env.MONGODB_URI?.startsWith('mongodb+srv://') && Array.isArray(env.MONGODB_DNS_SERVERS) && env.MONGODB_DNS_SERVERS.length > 0;
+
+const applyCustomMongoDns = () => {
+  if (!shouldUseCustomMongoDns()) {
+    return false;
+  }
+
+  dns.setServers(env.MONGODB_DNS_SERVERS);
+  return true;
+};
+
+const connectMongoWithUri = async (uri) => {
+  await mongoose.connect(uri, {
+    family: 4,
+    serverSelectionTimeoutMS: 10000,
+  });
+};
+
 export const connectMongoDB = async () => {
+  const usingCustomDns = applyCustomMongoDns();
+
   try {
-    await mongoose.connect(env.MONGODB_URI);
-    console.log('✅ MongoDB connected');
+    await connectMongoWithUri(env.MONGODB_URI);
+    console.log(usingCustomDns ? '✅ MongoDB connected (custom DNS)' : '✅ MongoDB connected');
     return true;
   } catch (err) {
+    if (!usingCustomDns && env.MONGODB_URI?.startsWith('mongodb+srv://') && isSrvDnsError(err)) {
+      try {
+        console.warn('⚠️  MongoDB SRV lookup failed — retrying with public DNS resolvers');
+        applyCustomMongoDns();
+        await connectMongoWithUri(env.MONGODB_URI);
+        console.log('✅ MongoDB connected (DNS fallback)');
+        return true;
+      } catch (retryErr) {
+        handleDbConnectionError('MongoDB', retryErr);
+        return false;
+      }
+    }
+
     handleDbConnectionError('MongoDB', err);
     return false;
   }

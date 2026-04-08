@@ -16,6 +16,49 @@ const checkGroupPermission = async (groupId, userId, requiredRoles) => {
   return member;
 };
 
+const parseMessageContent = (content) => {
+  if (content === undefined || content === null || content === '') return {};
+  if (typeof content === 'string') {
+    try {
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object') return parsed;
+      return { text: content };
+    } catch (_) {
+      return { text: content };
+    }
+  }
+  return content;
+};
+
+const parseStringArray = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  return [];
+};
+
+const emitToGroupRoom = (req, groupId, event, payload) => {
+  const io = req.app.get('io');
+  if (io) io.to(`conv:${groupId}`).emit(event, payload);
+};
+
+const emitToUserRoom = (req, userId, event, payload) => {
+  const io = req.app.get('io');
+  if (io) io.to(`user:${userId}`).emit(event, payload);
+};
+
+const removeUserFromGroupRoom = (req, userId, groupId) => {
+  const io = req.app.get('io');
+  if (io) io.in(`user:${userId}`).socketsLeave(`conv:${groupId}`);
+};
+
 // ─── GET MY GROUPS ─────────────────────────────
 export const getGroups = async (req, res, next) => {
   try {
@@ -76,6 +119,9 @@ export const getGroups = async (req, res, next) => {
 export const createGroup = async (req, res, next) => {
   try {
     const { name, description, type, max_members, is_invite_only, member_ids } = req.body;
+    const initialMemberIds = Array.isArray(member_ids)
+      ? member_ids.filter((id) => id !== req.user.id).slice(0, 255)
+      : [];
 
     const group = await prisma.group.create({
       data: {
@@ -99,18 +145,15 @@ export const createGroup = async (req, res, next) => {
     });
 
     // Add initial members
-    if (member_ids && Array.isArray(member_ids)) {
-      const validMembers = member_ids.filter((id) => id !== req.user.id).slice(0, 255);
-      if (validMembers.length > 0) {
+    if (initialMemberIds.length > 0) {
         await prisma.groupMember.createMany({
-          data: validMembers.map((user_id) => ({
+          data: initialMemberIds.map((user_id) => ({
             group_id: group.id,
             user_id,
             role: 'member',
           })),
           skipDuplicates: true,
         });
-      }
     }
 
     // System message
@@ -130,6 +173,16 @@ export const createGroup = async (req, res, next) => {
       },
     });
 
+    for (const memberId of initialMemberIds) {
+      emitToUserRoom(req, memberId, 'new_conversation', {
+        type: 'group',
+        group: {
+          ...created,
+          my_role: 'member',
+        },
+      });
+    }
+
     return ApiResponse.created('Group created', created).send(res);
   } catch (err) {
     next(err);
@@ -141,7 +194,7 @@ export const getGroup = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const group = await prisma.group.findUnique({
+    const groupSummary = await prisma.group.findUnique({
       where: { id },
       include: {
         owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
@@ -188,6 +241,12 @@ export const updateGroup = async (req, res, next) => {
       data,
     });
 
+    emitToGroupRoom(req, id, 'group_updated', {
+      group_id: id,
+      changes: group,
+      updated_by: req.user.id,
+    });
+
     return ApiResponse.ok('Group updated', group).send(res);
   } catch (err) {
     next(err);
@@ -200,10 +259,22 @@ export const deleteGroup = async (req, res, next) => {
     const { id } = req.params;
     await checkGroupPermission(id, req.user.id, ['owner']);
 
+    const members = await prisma.groupMember.findMany({
+      where: { group_id: id },
+      select: { user_id: true },
+    });
+
     await prisma.group.delete({ where: { id } });
 
     // Delete all messages from MongoDB
     await Message.deleteMany({ conversation_id: id, conversation_type: 'group' });
+
+    for (const member of members) {
+      emitToUserRoom(req, member.user_id, 'removed_from_group', { group_id: id });
+      removeUserFromGroupRoom(req, member.user_id, id);
+    }
+
+    emitToGroupRoom(req, id, 'group_deleted', { group_id: id });
 
     return ApiResponse.ok('Group deleted').send(res);
   } catch (err) {
@@ -254,7 +325,7 @@ export const addMember = async (req, res, next) => {
     // Check user exists
     const user = await prisma.user.findUnique({
       where: { id: user_id },
-      select: { id: true, display_name: true, status: true },
+      select: { id: true, username: true, display_name: true, avatar_url: true, status: true },
     });
     if (!user || user.status !== 'active') throw ApiError.notFound('User not found');
 
@@ -269,6 +340,28 @@ export const addMember = async (req, res, next) => {
       sender_id: req.user.id,
       message_type: 'system',
       content: { text: `${req.user.display_name} added ${user.display_name}` },
+    });
+
+    const groupSummary = await prisma.group.findUnique({
+      where: { id },
+      include: {
+        owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        _count: { select: { members: true } },
+      },
+    });
+
+    emitToGroupRoom(req, id, 'member_joined', {
+      group_id: id,
+      user,
+      added_by: req.user.id,
+    });
+
+    emitToUserRoom(req, user_id, 'new_conversation', {
+      type: 'group',
+      group: {
+        ...groupSummary,
+        my_role: 'member',
+      },
     });
 
     return ApiResponse.created('Member added').send(res);
@@ -299,6 +392,23 @@ export const removeMember = async (req, res, next) => {
       where: { group_id_user_id: { group_id: id, user_id: uid } },
     });
 
+    await Message.create({
+      conversation_id: id,
+      conversation_type: 'group',
+      sender_id: req.user.id,
+      message_type: 'system',
+      content: { text: `${req.user.display_name} removed a member` },
+    });
+
+    emitToGroupRoom(req, id, 'member_left', {
+      group_id: id,
+      user_id: uid,
+      removed_by: req.user.id,
+    });
+
+    emitToUserRoom(req, uid, 'removed_from_group', { group_id: id });
+    removeUserFromGroupRoom(req, uid, id);
+
     return ApiResponse.ok('Member removed').send(res);
   } catch (err) {
     next(err);
@@ -325,6 +435,13 @@ export const updateMemberRole = async (req, res, next) => {
     await prisma.groupMember.update({
       where: { group_id_user_id: { group_id: id, user_id: uid } },
       data: { role },
+    });
+
+    emitToGroupRoom(req, id, 'member_role_updated', {
+      group_id: id,
+      user_id: uid,
+      role,
+      updated_by: req.user.id,
     });
 
     return ApiResponse.ok('Role updated').send(res);
@@ -359,7 +476,7 @@ export const joinByInvite = async (req, res, next) => {
       return ApiResponse.ok('You are already a member', group).send(res);
     }
 
-    await prisma.groupMember.create({
+    const newMember = await prisma.groupMember.create({
       data: { group_id: group.id, user_id: req.user.id, role: 'member' },
     });
 
@@ -372,7 +489,29 @@ export const joinByInvite = async (req, res, next) => {
       content: { text: `${req.user.display_name} joined via invite link` },
     });
 
-    return ApiResponse.ok('Joined group successfully', group).send(res);
+    const joined = await prisma.group.findUnique({
+      where: { id: group.id },
+      include: {
+        owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        _count: { select: { members: true } },
+      },
+    });
+
+    emitToGroupRoom(req, group.id, 'member_joined', {
+      group_id: group.id,
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        display_name: req.user.display_name,
+        avatar_url: req.user.avatar_url,
+      },
+      added_by: req.user.id,
+    });
+
+    return ApiResponse.ok('Joined group successfully', {
+      ...joined,
+      my_role: newMember.role,
+    }).send(res);
   } catch (err) {
     next(err);
   }
@@ -400,10 +539,18 @@ export const leaveGroup = async (req, res, next) => {
           where: { id },
           data: { owner_id: nextOwner.user_id },
         });
+
+        emitToGroupRoom(req, id, 'group_updated', {
+          group_id: id,
+          changes: { owner_id: nextOwner.user_id },
+          updated_by: req.user.id,
+        });
       } else {
         // Last member — delete group
         await prisma.group.delete({ where: { id } });
         await Message.deleteMany({ conversation_id: id });
+        emitToUserRoom(req, req.user.id, 'removed_from_group', { group_id: id });
+        removeUserFromGroupRoom(req, req.user.id, id);
         return ApiResponse.ok('Group deleted (you were the last member)').send(res);
       }
     }
@@ -421,6 +568,15 @@ export const leaveGroup = async (req, res, next) => {
       content: { text: `${req.user.display_name} left the group` },
     });
 
+    emitToGroupRoom(req, id, 'member_left', {
+      group_id: id,
+      user_id: req.user.id,
+      removed_by: req.user.id,
+    });
+
+    emitToUserRoom(req, req.user.id, 'removed_from_group', { group_id: id });
+    removeUserFromGroupRoom(req, req.user.id, id);
+
     return ApiResponse.ok('Left group').send(res);
   } catch (err) {
     next(err);
@@ -434,6 +590,8 @@ export const getGroupMessages = async (req, res, next) => {
     await checkGroupPermission(id, req.user.id, ['owner', 'admin', 'moderator', 'member']);
 
     const { page, limit, skip } = getPagination(req.query.page, req.query.limit);
+    const offsetParam = Number(req.query.offset);
+    const effectiveSkip = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : skip;
 
     const messages = await Message.find({
       conversation_id: id,
@@ -443,7 +601,7 @@ export const getGroupMessages = async (req, res, next) => {
       deleted_for: { $ne: req.user.id },
     })
       .sort({ created_at: -1 })
-      .skip(skip)
+      .skip(effectiveSkip)
       .limit(limit)
       .populate('reply_to', 'content sender_id message_type')
       .lean();
@@ -484,11 +642,12 @@ export const sendGroupMessage = async (req, res, next) => {
     const { message_type, content, reply_to, is_announcement, mentions } = req.body;
 
     // Only admin can send announcements
-    if (is_announcement && !['owner', 'admin'].includes(member.role)) {
+    const isAnnouncement = is_announcement === true || is_announcement === 'true';
+    if (isAnnouncement && !['owner', 'admin'].includes(member.role)) {
       throw ApiError.forbidden('Only admins can send announcements');
     }
 
-    let messageContent = content || {};
+    let messageContent = parseMessageContent(content);
     if (req.file) {
       messageContent.media_url = req.file.path || req.file.secure_url || req.file.url;
       messageContent.media_type = req.file.mimetype;
@@ -502,16 +661,58 @@ export const sendGroupMessage = async (req, res, next) => {
       sender_id: req.user.id,
       message_type: message_type || 'text',
       content: messageContent,
-      reply_to: reply_to || null,
-      is_announcement: is_announcement || false,
-      mentions: mentions || [],
+      reply_to: typeof reply_to === 'string' ? reply_to : (reply_to || null),
+      is_announcement: isAnnouncement,
+      mentions: parseStringArray(mentions),
     });
 
     const populated = await Message.findById(message._id)
       .populate('reply_to', 'content sender_id message_type')
       .lean();
 
+    populated.sender = {
+      id: req.user.id,
+      username: req.user.username,
+      display_name: req.user.display_name,
+      avatar_url: req.user.avatar_url,
+    };
+
+    emitToGroupRoom(req, id, 'new_message', populated);
+
     return ApiResponse.created('Message sent', populated).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── GROUP MEDIA GALLERY ──────────────────────
+export const getGroupMedia = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await checkGroupPermission(id, req.user.id, ['owner', 'admin', 'moderator', 'member']);
+
+    const { page, limit, skip } = getPagination(req.query.page, req.query.limit);
+    const { type } = req.query;
+
+    const typeFilter = type
+      ? { message_type: type }
+      : { message_type: { $in: ['image', 'video', 'audio', 'file'] } };
+
+    const media = await Message.find({
+      conversation_id: id,
+      conversation_type: 'group',
+      ...typeFilter,
+      is_deleted: false,
+      deleted_for_all: false,
+      deleted_for: { $ne: req.user.id },
+    })
+      .sort({ created_at: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('content message_type sender_id created_at')
+      .lean();
+
+    return ApiResponse.ok('Group media gallery', media).send(res);
   } catch (err) {
     next(err);
   }
