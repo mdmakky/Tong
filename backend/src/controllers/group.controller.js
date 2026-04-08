@@ -194,7 +194,7 @@ export const getGroup = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const groupSummary = await prisma.group.findUnique({
+    const group = await prisma.group.findUnique({
       where: { id },
       include: {
         owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },

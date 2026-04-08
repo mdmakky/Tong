@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Search, X, Lock, Globe, Shield } from 'lucide-react'
+import { Search, X, Lock, Globe, Shield, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
+import toast from 'react-hot-toast'
 import useChatStore from '@/store/chatStore'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
+import { groupApi } from '@/lib/apiServices'
 import { formatConvTime, truncate } from '@/utils/helpers'
 
 const TYPE_ICON = {
@@ -14,11 +16,48 @@ const TYPE_ICON = {
 
 export default function GroupList() {
   const [search, setSearch] = useState('')
-  const { groups, activeConversation, setActiveConversation, unreadCounts } = useChatStore()
+  const [busyGroupId, setBusyGroupId] = useState(null)
+  const {
+    groups,
+    activeConversation,
+    setActiveConversation,
+    removeGroup,
+    unreadCounts,
+  } = useChatStore()
 
   const filtered = groups.filter((g) =>
     !search || g.name?.toLowerCase().includes(search.toLowerCase())
   )
+
+  const handleDeleteGroupChat = async (group) => {
+    if (!group?.id || busyGroupId) return
+
+    const isOwner = group.my_role === 'owner'
+    const confirmed = window.confirm(
+      isOwner
+        ? `Delete group \"${group.name || 'this group'}\" for everyone? This cannot be undone.`
+        : `Leave and remove \"${group.name || 'this group'}\" from your chats?`
+    )
+
+    if (!confirmed) return
+
+    setBusyGroupId(group.id)
+    try {
+      if (isOwner) {
+        await groupApi.delete(group.id)
+        toast.success('Group deleted')
+      } else {
+        await groupApi.leave(group.id)
+        toast.success('Group chat removed')
+      }
+
+      removeGroup(group.id)
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to remove group chat')
+    } finally {
+      setBusyGroupId(null)
+    }
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -48,41 +87,63 @@ export default function GroupList() {
           const TypeIcon = TYPE_ICON[group.type] || Globe
           const unread = unreadCounts[group.id] || 0
           const isActive = activeConversation?.id === group.id
+          const isBusy = busyGroupId === group.id
 
           return (
-            <button
+            <div
               key={group.id}
-              onClick={() => setActiveConversation(group, 'group')}
               className={clsx(
-                'w-full flex items-center gap-3 px-3 py-3 hover:bg-surface-hover transition-colors text-left',
+                'w-full flex items-center gap-2 px-2 py-2 hover:bg-surface-hover transition-colors',
                 isActive && 'bg-surface-active'
               )}
             >
-              <Avatar
-                src={group.avatar_url}
-                name={group.name}
-                size="md"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-0.5">
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-sm font-medium text-text-primary truncate">{group.name}</span>
-                    <TypeIcon className="w-3 h-3 text-text-muted flex-shrink-0" />
+              <button
+                onClick={() => setActiveConversation(group, 'group')}
+                className="flex-1 min-w-0 flex items-center gap-3 px-1 py-1 text-left"
+              >
+                <Avatar
+                  src={group.avatar_url}
+                  name={group.name}
+                  size="md"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-sm font-medium text-text-primary truncate">{group.name}</span>
+                      <TypeIcon className="w-3 h-3 text-text-muted flex-shrink-0" />
+                    </div>
+                    <span className="text-xs text-text-muted flex-shrink-0 ml-2">
+                      {formatConvTime(group.last_message_at || group.created_at)}
+                    </span>
                   </div>
-                  <span className="text-xs text-text-muted flex-shrink-0 ml-2">
-                    {formatConvTime(group.last_message_at || group.created_at)}
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className={clsx('text-xs truncate', unread > 0 ? 'text-text-secondary font-medium' : 'text-text-muted')}>
+                      {group.last_message
+                        ? truncate(group.last_message?.content?.text || 'Media', 35)
+                        : `${group._count?.members || group.member_count || 0} members`}
+                    </span>
+                    {unread > 0 && <Badge count={unread} className="ml-2 flex-shrink-0" />}
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className={clsx('text-xs truncate', unread > 0 ? 'text-text-secondary font-medium' : 'text-text-muted')}>
-                    {group.last_message
-                      ? truncate(group.last_message?.content?.text || 'Media', 35)
-                      : `${group._count?.members || group.member_count || 0} members`}
-                  </span>
-                  {unread > 0 && <Badge count={unread} className="ml-2 flex-shrink-0" />}
-                </div>
-              </div>
-            </button>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteGroupChat(group)
+                }}
+                disabled={isBusy}
+                className={clsx(
+                  'p-2 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0',
+                  isBusy && 'opacity-50 cursor-not-allowed'
+                )}
+                title={group.my_role === 'owner' ? 'Delete group' : 'Leave and remove group chat'}
+                aria-label={group.my_role === 'owner' ? 'Delete group' : 'Leave and remove group chat'}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           )
         })}
       </div>
