@@ -6,6 +6,7 @@ services:
     rootDir: backend
     buildCommand: npm install && node_modules/.bin/prisma generate
     startCommand: npm start
+
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
