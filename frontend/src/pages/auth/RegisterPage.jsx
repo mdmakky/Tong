@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Lock, Mail, User, Phone, CheckCircle2 } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, User, Phone, CheckCircle2, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/lib/apiServices'
