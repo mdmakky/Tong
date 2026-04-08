@@ -40,6 +40,10 @@ const env = {
 
   // App
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+  ALLOWED_ORIGINS: (process.env.FRONTEND_URL || 'http://localhost:3000')
+    .split(',')
+    .map(u => u.trim())
+    .filter(Boolean),
 
   // OTP
   OTP_EXPIRES_MINUTES: parseInt(process.env.OTP_EXPIRES_MINUTES, 10) || 10,

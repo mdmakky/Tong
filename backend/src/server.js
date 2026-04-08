@@ -11,7 +11,7 @@ const server = http.createServer(app);
 // ─── Initialize Socket.io ──────────────────────
 const io = new SocketIO(server, {
   cors: {
-    origin: env.FRONTEND_URL,
+    origin: env.ALLOWED_ORIGINS,
     methods: ['GET', 'POST'],
     credentials: true,
   },

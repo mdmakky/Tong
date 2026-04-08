@@ -18,7 +18,12 @@ const app = express();
 // ─── Security ──────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin: env.FRONTEND_URL,
+  origin: (origin, callback) => {
+    // allow requests with no origin (mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+    if (env.ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin ${origin} not allowed`));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],

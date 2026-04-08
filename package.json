@@ -1,4 +1,13 @@
 {
+  "name": "tong",
+  "version": "1.0.0",
+  "description": "Tong — Real-time Messaging Platform",
+  "scripts": {
+    "build:backend": "cd backend && npm install && npm run build",
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "start:backend": "cd backend && npm start",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
   "dependencies": {
     "dotenv": "^17.4.1",
     "socket.io": "^4.8.3"
