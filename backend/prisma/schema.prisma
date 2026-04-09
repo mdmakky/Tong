@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserStatus {
+  active
+  banned
+  deleted
+}
+
+enum GroupType {
+  public
+  private
+  secret
+}
+
+enum GroupRole {
+  owner
+  admin
+  moderator
+  member
+}
+
+enum ConversationType {
+  direct
+  private_encrypted
+}
+
+enum FriendRequestStatus {
+  pending
+  accepted
+  rejected
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  username           String    @unique @db.VarChar(50)
+  email              String    @unique @db.VarChar(255)
+  phone              String?   @unique @db.VarChar(20)
+  password_hash      String    @db.Text
+  display_name       String    @db.VarChar(100)
+  avatar_url         String?   @db.Text
+  bio                String?   @db.VarChar(500)
+  status             UserStatus @default(active)
+  is_verified        Boolean   @default(false)
+  last_seen          DateTime? @db.Timestamptz()
+  two_factor_secret  String?   @db.Text
+  two_factor_enabled Boolean   @default(false)
+  notification_token String?   @db.Text
+  theme_preference   String    @default("system") @db.VarChar(10)
+  language           String    @default("bn") @db.VarChar(10)
+  timezone           String    @default("Asia/Dhaka") @db.VarChar(50)
+  online_status      String    @default("online") @db.VarChar(20) // online/away/busy/invisible
+  custom_status      String?   @db.VarChar(200)
+  last_seen_visibility String  @default("everyone") @db.VarChar(20) // everyone/contacts/nobody
+  avatar_visibility    String  @default("everyone") @db.VarChar(20) // everyone/contacts/nobody
+  created_at         DateTime  @default(now()) @db.Timestamptz()
+  updated_at         DateTime  @updatedAt @db.Timestamptz()
+
+  // Relations
+  owned_groups          Group[]           @relation("GroupOwner")
+  group_memberships     GroupMember[]
+  conversations_as_p1   Conversation[]    @relation("Participant1")
+  conversations_as_p2   Conversation[]    @relation("Participant2")
+  blocked_conversations Conversation[]    @relation("BlockedBy")
+  blocks_given          UserBlock[]       @relation("Blocker")
+  blocks_received       UserBlock[]       @relation("Blocked")
+  reports_given         UserReport[]      @relation("Reporter")
+  reports_received      UserReport[]      @relation("Reported")
+  devices               UserDevice[]
+  sent_friend_requests  FriendRequest[]   @relation("FriendRequester")
+  received_friend_requests FriendRequest[] @relation("FriendReceiver")
+  contacts              Contact[]         @relation("ContactOwner")
+  contact_of            Contact[]         @relation("ContactUser")
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// GROUPS
+// ─────────────────────────────────────────────
+
+model Group {
+  id                    String    @id @default(uuid()) @db.Uuid
+  name                  String    @db.VarChar(100)
+  unique_group_id       String?   @unique @db.VarChar(30)
+  description           String?   @db.Text
+  avatar_url            String?   @db.Text
+  type                  GroupType
+  owner_id              String    @db.Uuid
+  max_members           Int       @default(256)
+  invite_link           String?   @unique @db.VarChar(100)
+  is_invite_only        Boolean   @default(false)
+  message_retention_days Int?
+  created_at            DateTime  @default(now()) @db.Timestamptz()
+  updated_at            DateTime  @updatedAt @db.Timestamptz()
+
+  // Relations
+  owner   User          @relation("GroupOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  members GroupMember[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id          String    @id @default(uuid()) @db.Uuid
+  group_id    String    @db.Uuid
+  user_id     String    @db.Uuid
+  role        GroupRole  @default(member)
+  nickname    String?   @db.VarChar(100)
+  muted_until DateTime? @db.Timestamptz()
+  joined_at   DateTime  @default(now()) @db.Timestamptz()
+  last_read_at DateTime? @db.Timestamptz()
+
+  // Relations
+  group Group @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([group_id, user_id])
+  @@map("group_members")
+}
+
+// ─────────────────────────────────────────────
+// CONVERSATIONS (One-to-One & Private)
+// ─────────────────────────────────────────────
+
+model Conversation {
+  id                  String           @id @default(uuid()) @db.Uuid
+  type                ConversationType
+  participant_1       String           @db.Uuid
+  participant_2       String           @db.Uuid
+  is_blocked          Boolean          @default(false)
+  blocked_by          String?          @db.Uuid
+  encryption_key_hash String?          @db.Text
+  created_at          DateTime         @default(now()) @db.Timestamptz()
+  updated_at          DateTime         @updatedAt @db.Timestamptz()
+
+  // Relations
+  user1       User  @relation("Participant1", fields: [participant_1], references: [id], onDelete: Cascade)
+  user2       User  @relation("Participant2", fields: [participant_2], references: [id], onDelete: Cascade)
+  blocker     User? @relation("BlockedBy", fields: [blocked_by], references: [id])
+
+  @@unique([participant_1, participant_2])
+  @@map("conversations")
+}
+
+// ─────────────────────────────────────────────
+// USER BLOCKS
+// ─────────────────────────────────────────────
+
+model UserBlock {
+  id         String   @id @default(uuid()) @db.Uuid
+  blocker_id String   @db.Uuid
+  blocked_id String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  blocker User @relation("Blocker", fields: [blocker_id], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blocked_id], references: [id], onDelete: Cascade)
+
+  @@unique([blocker_id, blocked_id])
+  @@map("user_blocks")
+}
+
+// ─────────────────────────────────────────────
+// USER REPORTS
+// ─────────────────────────────────────────────
+
+model UserReport {
+  id          String   @id @default(uuid()) @db.Uuid
+  reporter_id String   @db.Uuid
+  reported_id String   @db.Uuid
+  reason      String   @db.VarChar(500)
+  details     String?  @db.Text
+  status      String   @default("pending") @db.VarChar(20) // pending/reviewed/resolved
+  created_at  DateTime @default(now()) @db.Timestamptz()
+
+  reporter User @relation("Reporter", fields: [reporter_id], references: [id], onDelete: Cascade)
+  reported User @relation("Reported", fields: [reported_id], references: [id], onDelete: Cascade)
+
+  @@map("user_reports")
+}
+
+// ─────────────────────────────────────────────
+// USER DEVICES (Session Tracking)
+// ─────────────────────────────────────────────
+
+model UserDevice {
+  id            String   @id @default(uuid()) @db.Uuid
+  user_id       String   @db.Uuid
+  device_name   String   @db.VarChar(200)
+  device_type   String   @db.VarChar(50) // web/mobile/desktop
+  ip_address    String?  @db.VarChar(50)
+  user_agent    String?  @db.Text
+  refresh_token String?  @db.Text
+  last_active   DateTime @default(now()) @db.Timestamptz()
+  created_at    DateTime @default(now()) @db.Timestamptz()
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_devices")
+}
+
+// ─────────────────────────────────────────────
+// FRIEND REQUESTS
+// ─────────────────────────────────────────────
+
+model FriendRequest {
+  id          String              @id @default(uuid()) @db.Uuid
+  sender_id   String              @db.Uuid
+  receiver_id String              @db.Uuid
+  status      FriendRequestStatus @default(pending)
+  created_at  DateTime            @default(now()) @db.Timestamptz()
+  updated_at  DateTime            @updatedAt @db.Timestamptz()
+
+  sender   User @relation("FriendRequester", fields: [sender_id], references: [id], onDelete: Cascade)
+  receiver User @relation("FriendReceiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+
+  @@unique([sender_id, receiver_id])
+  @@map("friend_requests")
+}
+
+// ─────────────────────────────────────────────
+// CONTACTS
+// ─────────────────────────────────────────────
+
+model Contact {
+  id         String   @id @default(uuid()) @db.Uuid
+  owner_id   String   @db.Uuid
+  contact_id String   @db.Uuid
+  nickname   String?  @db.VarChar(100)
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  owner   User @relation("ContactOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  contact User @relation("ContactUser", fields: [contact_id], references: [id], onDelete: Cascade)
+
+  @@unique([owner_id, contact_id])
+  @@map("contacts")
+}

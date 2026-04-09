@@ -1,0 +1,70 @@
+services:
+  # ─── Backend Web Service ────────────────────────────────────────────────────
+  - type: web
+    name: tong-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install && node_modules/.bin/prisma generate
+    startCommand: npm start
+
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Databases — set values in Render dashboard
+      - key: DATABASE_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      # JWT
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      # Cloudinary
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      # SMTP
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: SMTP_FROM_NAME
+        value: Tong Messenger
+      # Frontend URL — set to your Render static site URL after first deploy
+      - key: FRONTEND_URL
+        sync: false
+
+  # ─── Frontend Static Site ───────────────────────────────────────────────────
+  - type: web
+    name: tong-frontend
+    env: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      # Set to your tong-backend Render URL e.g. https://tong-backend.onrender.com
+      - key: VITE_BACKEND_URL
+        sync: false
