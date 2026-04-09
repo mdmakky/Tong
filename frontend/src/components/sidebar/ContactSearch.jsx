@@ -12,11 +12,12 @@ export default function ContactSearch() {
   const [starting, setStarting] = useState(null)
   const trimmedQuery = query.trim()
 
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isError, error } = useQuery({
     queryKey: ['user-search', query],
     queryFn: () => userApi.search(query).then((r) => r.data.data?.users ?? r.data.data ?? []),
     enabled: trimmedQuery.length >= 2,
     staleTime: 5000,
+    retry: 1,
   })
 
   const users = Array.isArray(data) ? data : []
@@ -60,7 +61,12 @@ export default function ContactSearch() {
             <Loader2 className="w-5 h-5 text-text-muted animate-spin" />
           </div>
         )}
-        {!isFetching && users.length === 0 && trimmedQuery.length >= 2 && (
+        {isError && trimmedQuery.length >= 2 && (
+          <p className="text-red-400 text-sm text-center py-8">
+            {error?.response?.data?.message || 'Search failed. Please try again.'}
+          </p>
+        )}
+        {!isFetching && !isError && users.length === 0 && trimmedQuery.length >= 2 && (
           <p className="text-text-muted text-sm text-center py-8">No users found</p>
         )}
         {users.map((u) => (
