@@ -152,7 +152,20 @@ export default function ConversationList() {
                     )}>
                       {getLastMessage(conv)}
                     </span>
-                    {unread > 0 && <Badge count={unread} className="ml-2 flex-shrink-0" />}
+                    <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
+                      {unread > 0 && <Badge count={unread} />}
+                      {/* Messenger-style: show receiver's tiny avatar when your last message is seen */}
+                      {unread === 0 &&
+                        conv.last_message?.sender_id === user?.id &&
+                        conv.last_message?.status === 'read' &&
+                        conv.last_message?.read_by && (
+                        <img
+                          src={conv.last_message.read_by.reader_avatar_url || other?.avatar_url}
+                          alt="Seen"
+                          className="w-4 h-4 rounded-full object-cover ring-1 ring-bg-primary"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               </button>

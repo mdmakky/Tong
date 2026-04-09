@@ -102,7 +102,7 @@ export const getConversations = async (req, res, next) => {
             deleted_for: { $ne: userId },
           })
             .sort({ created_at: -1 })
-            .select('content message_type sender_id created_at')
+            .select('content message_type sender_id created_at read_receipts delivered_to')
             .lean(),
           Message.countDocuments({
             ...baseMessageQuery,
@@ -114,13 +114,39 @@ export const getConversations = async (req, res, next) => {
         ]);
 
         const friendReq = reqMap[otherUser?.id];
+
+        // Compute status on last_message only if sent by the current user
+        let enrichedLastMessage = null;
+        if (lastMessage) {
+          const { read_receipts, delivered_to, ...cleanMsg } = lastMessage;
+          if (lastMessage.sender_id === userId) {
+            const readByOther = (read_receipts || []).find(
+              (r) => r.user_id === otherUser?.id
+            );
+            if (readByOther) {
+              cleanMsg.status = 'read';
+              cleanMsg.read_by = {
+                reader_id: otherUser?.id,
+                reader_avatar_url: otherUser?.avatar_url || null,
+                reader_display_name: otherUser?.display_name || null,
+                read_at: readByOther.read_at,
+              };
+            } else if ((delivered_to || []).includes(otherUser?.id)) {
+              cleanMsg.status = 'delivered';
+            } else {
+              cleanMsg.status = 'sent';
+            }
+          }
+          enrichedLastMessage = cleanMsg;
+        }
+
         return {
           id: conv.id,
           type: conv.type,
           is_blocked: conv.is_blocked,
           blocked_by: conv.blocked_by,
           other_user: otherUser,
-          last_message: lastMessage || null,
+          last_message: enrichedLastMessage,
           unread_count: unreadCount,
           request_status: friendReq?.status || null,
           request_id: friendReq?.id || null,

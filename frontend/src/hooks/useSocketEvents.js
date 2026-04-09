@@ -75,36 +75,62 @@ export default function useSocketEvents() {
     // ─── Message delivered ───
     const onDelivered = ({ message_id, conversation_id }) => {
       updateMessage(conversation_id, message_id, { status: 'delivered' })
+      // Update conversation sidebar last_message status
+      const store = useChatStore.getState()
+      const conv = store.conversations.find((c) => c.id === conversation_id)
+      const lastMsgId = conv?.last_message?._id || conv?.last_message?.id
+      if (lastMsgId && lastMsgId === message_id) {
+        upsertConversation({
+          id: conversation_id,
+          last_message: { ...conv.last_message, status: 'delivered' },
+        })
+      }
     }
 
     // ─── Single message read ───
     const onRead = ({ message_id, conversation_id, reader_id, reader_avatar_url, reader_display_name, read_at }) => {
-      updateMessage(conversation_id, message_id, {
-        status: 'read',
-        read_by: { reader_id, reader_avatar_url, reader_display_name, read_at },
-      })
+      const readInfo = { reader_id, reader_avatar_url, reader_display_name, read_at }
+      updateMessage(conversation_id, message_id, { status: 'read', read_by: readInfo })
+      // Update conversation sidebar last_message with seen info
+      const store = useChatStore.getState()
+      const conv = store.conversations.find((c) => c.id === conversation_id)
+      const lastMsgId = conv?.last_message?._id || conv?.last_message?.id
+      if (lastMsgId && lastMsgId === message_id) {
+        upsertConversation({
+          id: conversation_id,
+          last_message: { ...conv.last_message, status: 'read', read_by: readInfo },
+        })
+      }
     }
 
     // ─── Bulk messages read (when receiver opens the conversation) ───
     const onBulkRead = ({ message_ids, conversation_id, reader_id, reader_avatar_url, reader_display_name, read_at }) => {
       const readInfo = { reader_id, reader_avatar_url, reader_display_name, read_at }
-      // For 1-to-1 chats: if the receiver opened the conversation, they saw everything.
-      // Mark ALL own messages in that conversation as 'read'.
       const store = useChatStore.getState()
-      const convMessages = store.messages[conversation_id] || []
-      if (convMessages.length === 0) return
-
       const currentUserId = useAuthStore.getState().user?.id
-      const updated = convMessages.map((m) => {
-        // Only update own messages (the ones the sender sent)
-        if (m.sender_id === currentUserId && m.status !== 'read') {
-          return { ...m, status: 'read', read_by: readInfo }
-        }
-        return m
-      })
-      useChatStore.setState((state) => ({
-        messages: { ...state.messages, [conversation_id]: updated },
-      }))
+
+      // Mark ALL own messages in that conversation as 'read'
+      const convMessages = store.messages[conversation_id] || []
+      if (convMessages.length > 0) {
+        const updated = convMessages.map((m) => {
+          if (m.sender_id === currentUserId && m.status !== 'read') {
+            return { ...m, status: 'read', read_by: readInfo }
+          }
+          return m
+        })
+        useChatStore.setState((state) => ({
+          messages: { ...state.messages, [conversation_id]: updated },
+        }))
+      }
+
+      // Update conversation sidebar last_message with seen info
+      const conv = store.conversations.find((c) => c.id === conversation_id)
+      if (conv?.last_message && conv.last_message.sender_id === currentUserId) {
+        upsertConversation({
+          id: conversation_id,
+          last_message: { ...conv.last_message, status: 'read', read_by: readInfo },
+        })
+      }
     }
 
     // ─── Message edited ───
