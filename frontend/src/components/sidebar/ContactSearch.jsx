@@ -29,7 +29,7 @@ export default function ContactSearch() {
     retry: 1,
   })
 
-  const users = Array.isArray(data) ? data : []
+  const users = (Array.isArray(data) ? data : []).filter((u) => u && u.id)
 
   const startChat = async (userId) => {
     setStarting(userId)
@@ -78,12 +78,16 @@ export default function ContactSearch() {
         {!isFetching && !isError && users.length === 0 && debouncedQuery.length >= 2 && (
           <p className="text-text-muted text-sm text-center py-8">No users found</p>
         )}
-        {users.map((u) => (
+        {users.map((u) => {
+          const displayName = u.display_name || u.username || 'Unknown user'
+          const username = u.username || 'unknown'
+
+          return (
           <div key={u.id} className="flex items-center gap-3 py-2.5">
-            <Avatar src={u.avatar_url} name={u.display_name} size="md" status={u.online_status} />
+            <Avatar src={u.avatar_url} name={displayName} size="md" status={u.online_status} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary truncate">{u.display_name}</p>
-              <p className="text-xs text-text-muted">@{u.username}</p>
+              <p className="text-sm font-medium text-text-primary truncate">{displayName}</p>
+              <p className="text-xs text-text-muted">@{username}</p>
             </div>
             <button
               onClick={() => startChat(u.id)}
@@ -98,7 +102,8 @@ export default function ContactSearch() {
               )}
             </button>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
