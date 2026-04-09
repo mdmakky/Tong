@@ -29,6 +29,7 @@ export default function App() {
         fetchMe()
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
   return (
