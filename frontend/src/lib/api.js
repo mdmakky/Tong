@@ -40,7 +40,11 @@ api.interceptors.response.use(
   async (error) => {
     const original = error.config
 
-    if (error.response?.status === 401 && !original._retry) {
+    // Never retry auth routes — they don't need token refresh and retrying
+    // /auth/logout causes an infinite loop (logout → 401 → logout → ...)
+    const isAuthRoute = original?.url?.includes('/auth/')
+
+    if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           pendingQueue.push({ resolve, reject })
