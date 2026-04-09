@@ -30,6 +30,14 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
   const msg = message
   const isDeleted = msg.is_deleted_for_all
 
+  // Check if message is older than 24 hours
+  const isOlderThan24Hours = () => {
+    const messageTime = new Date(msg.created_at).getTime()
+    const currentTime = Date.now()
+    const hoursDiff = (currentTime - messageTime) / (1000 * 60 * 60)
+    return hoursDiff > 24
+  }
+
   // Check if this is a system event message (e.g. "X added Y")
   const isSystem = msg.message_type === 'system'
 
@@ -127,6 +135,13 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
     }
 
     if (editText === msg.content?.text) {
+      setEditMode(false)
+      return
+    }
+
+    // Check if message is older than 24 hours
+    if (isOlderThan24Hours()) {
+      toast.error('Messages cannot be edited after 24 hours')
       setEditMode(false)
       return
     }
@@ -329,6 +344,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
             onCopy={handleCopy}
             onDelete={handleDelete}
             onEdit={isOwn ? () => setEditMode(true) : undefined}
+            canEdit={!isOlderThan24Hours()}
           />
         </div>
       )}
@@ -466,7 +482,7 @@ function QuickReactions({ onSelect }) {
 }
 
 // ─── Message actions menu ─────────────────────────────────────────────────────
-function MessageActionsMenu({ isOwn, onCopy, onDelete, onEdit }) {
+function MessageActionsMenu({ isOwn, onCopy, onDelete, onEdit, canEdit }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -487,10 +503,19 @@ function MessageActionsMenu({ isOwn, onCopy, onDelete, onEdit }) {
           >
             Copy text
           </button>
-          {isOwn && onEdit && (
+          {isOwn && onEdit && canEdit && (
             <button
               onClick={() => { onEdit(); setOpen(false) }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+          )}
+          {isOwn && onEdit && !canEdit && (
+            <button
+              disabled
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-muted opacity-50 cursor-not-allowed"
+              title="Messages cannot be edited after 24 hours"
             >
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>

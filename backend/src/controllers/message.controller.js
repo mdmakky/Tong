@@ -14,6 +14,15 @@ export const editMessage = async (req, res, next) => {
     if (message.sender_id !== userId) throw ApiError.forbidden('Can only edit your own messages');
     if (message.is_deleted || message.deleted_for_all) throw ApiError.badRequest('Cannot edit deleted message');
 
+    // Check if message is older than 24 hours
+    const messageCreatedTime = new Date(message.created_at).getTime();
+    const currentTime = Date.now();
+    const hoursDiff = (currentTime - messageCreatedTime) / (1000 * 60 * 60);
+
+    if (hoursDiff > 24) {
+      throw ApiError.badRequest('Messages cannot be edited after 24 hours');
+    }
+
     // Save edit history
     message.edit_history.push({
       content: message.content.text,
@@ -21,6 +30,7 @@ export const editMessage = async (req, res, next) => {
     });
     message.content.text = text;
     message.is_edited = true;
+    message.edited_at = new Date();
     await message.save();
 
     return ApiResponse.ok('Message edited', message).send(res);
