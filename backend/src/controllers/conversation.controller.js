@@ -102,7 +102,7 @@ export const getConversations = async (req, res, next) => {
             deleted_for: { $ne: userId },
           })
             .sort({ created_at: -1 })
-            .select('content message_type sender_id created_at')
+            .select('content message_type sender_id created_at read_receipts delivered_to')
             .lean(),
           Message.countDocuments({
             ...baseMessageQuery,
@@ -114,13 +114,39 @@ export const getConversations = async (req, res, next) => {
         ]);
 
         const friendReq = reqMap[otherUser?.id];
+
+        // Compute status on last_message only if sent by the current user
+        let enrichedLastMessage = null;
+        if (lastMessage) {
+          const { read_receipts, delivered_to, ...cleanMsg } = lastMessage;
+          if (lastMessage.sender_id === userId) {
+            const readByOther = (read_receipts || []).find(
+              (r) => r.user_id === otherUser?.id
+            );
+            if (readByOther) {
+              cleanMsg.status = 'read';
+              cleanMsg.read_by = {
+                reader_id: otherUser?.id,
+                reader_avatar_url: otherUser?.avatar_url || null,
+                reader_display_name: otherUser?.display_name || null,
+                read_at: readByOther.read_at,
+              };
+            } else if ((delivered_to || []).includes(otherUser?.id)) {
+              cleanMsg.status = 'delivered';
+            } else {
+              cleanMsg.status = 'sent';
+            }
+          }
+          enrichedLastMessage = cleanMsg;
+        }
+
         return {
           id: conv.id,
           type: conv.type,
           is_blocked: conv.is_blocked,
           blocked_by: conv.blocked_by,
           other_user: otherUser,
-          last_message: lastMessage || null,
+          last_message: enrichedLastMessage,
           unread_count: unreadCount,
           request_status: friendReq?.status || null,
           request_id: friendReq?.id || null,
@@ -428,25 +454,9 @@ export const getMessages = async (req, res, next) => {
 
     if (!conversation) throw ApiError.notFound('Conversation not found');
 
-    // Persist read state when opening a direct conversation from REST.
-    if (!before && effectiveSkip === 0) {
-      const readAt = new Date();
-      await Message.updateMany(
-        {
-          conversation_id: id,
-          sender_id: { $ne: userId },
-          is_deleted: false,
-          deleted_for_all: false,
-          deleted_for: { $ne: userId },
-          'read_receipts.user_id': { $ne: userId },
-        },
-        {
-          $addToSet: {
-            read_receipts: { user_id: userId, read_at: readAt },
-          },
-        }
-      );
-    }
+    // NOTE: Read receipts are handled by the socket 'message_read' event
+    // (emitted from ChatWindow Effect 2) so that the sender gets real-time
+    // 'seen' notifications. Do NOT mark as read here to avoid race conditions.
 
     const query = {
       conversation_id: id,
@@ -476,11 +486,38 @@ export const getMessages = async (req, res, next) => {
     });
     const userMap = Object.fromEntries(senderUsers.map((u) => [u.id, u]));
 
-    // Replace deleted-for-all content with tombstone — keep message in list
+    // Determine the other participant so we can compute read/delivered status
+    const otherUserId = conversation.participant_1 === userId
+      ? conversation.participant_2
+      : conversation.participant_1;
+    const otherUser = userMap[otherUserId] || null;
+
+    // Replace deleted-for-all content with tombstone + compute status from DB fields
     const sanitized = messages.map((m) => {
       const base = m.deleted_for_all
         ? { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true }
         : { ...m, is_deleted_for_all: false };
+
+      // Compute status only for own messages (sent by the current user)
+      if (m.sender_id === userId) {
+        const readByOther = (m.read_receipts || []).find((r) => r.user_id === otherUserId);
+        const deliveredToOther = (m.delivered_to || []).includes(otherUserId);
+
+        if (readByOther) {
+          base.status = 'read';
+          base.read_by = {
+            reader_id: otherUserId,
+            reader_avatar_url: otherUser?.avatar_url || null,
+            reader_display_name: otherUser?.display_name || null,
+            read_at: readByOther.read_at,
+          };
+        } else if (deliveredToOther) {
+          base.status = 'delivered';
+        } else {
+          base.status = 'sent';
+        }
+      }
+
       return {
         ...base,
         sender: userMap[m.sender_id] || null,

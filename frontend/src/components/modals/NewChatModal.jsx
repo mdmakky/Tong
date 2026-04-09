@@ -30,11 +30,10 @@ export default function NewChatModal({ onClose }) {
             <button
               key={t}
               onClick={() => setTab(i)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
-                tab === i
+              className={`flex-1 py-2.5 text-sm font-medium transition-colors ${tab === i
                   ? 'text-accent-yellow border-b-2 border-accent-yellow'
                   : 'text-text-muted hover:text-text-secondary'
-              }`}
+                }`}
             >
               {t}
             </button>
@@ -223,7 +222,7 @@ function NewGroupChat({ onSuccess }) {
         try {
           const { data: avatarRes } = await groupApi.uploadAvatar(group.id, avatar)
           group.avatar_url = avatarRes.data?.avatar_url
-        } catch (_) {}
+        } catch (_) { }
       }
       toast.success(`Group "${name}" created!`)
       onSuccess(group)
@@ -334,11 +333,10 @@ function NewGroupChat({ onSuccess }) {
               key={t.value}
               type="button"
               onClick={() => setType(t.value)}
-              className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs transition-colors ${
-                type === t.value
+              className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border text-xs transition-colors ${type === t.value
                   ? 'border-accent-yellow bg-accent-yellow/10 text-accent-yellow'
                   : 'border-border text-text-secondary hover:border-border/80'
-              }`}
+                }`}
             >
               <t.icon className="w-4 h-4" />
               <span className="font-medium">{t.label}</span>

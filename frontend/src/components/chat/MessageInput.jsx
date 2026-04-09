@@ -147,8 +147,9 @@ export default function MessageInput({ conversationId, conversationType }) {
             reply_to: payload.reply_to,
           }, (response) => {
             if (response?.success) {
-              // Replace the optimistic message with the real one
-              replaceMessage(conversationId, tempId, response.message)
+              // Replace optimistic msg with the real one (status comes from server: 'sent' or 'delivered')
+              const realMsg = { ...response.message, status: response.message.status || 'sent' }
+              replaceMessage(conversationId, tempId, realMsg)
             } else {
               // Remove the optimistic message and show error
               removeMessage(conversationId, tempId)

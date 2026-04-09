@@ -37,6 +37,26 @@ export default function useSocketEvents() {
       appendMessage(convId, message)
       incrementUnread(convId)
 
+      // Auto-acknowledge delivery so the sender sees double-tick in real-time
+      if (message._id && message.conversation_type !== 'group') {
+        socket.emit('mark_delivered', { message_id: message._id })
+      }
+
+      // If the user is currently viewing this conversation, auto-mark as read
+      // so the sender gets "seen" in real-time without the receiver needing to re-open the chat.
+      const currentUserId = useAuthStore.getState().user?.id
+      const store = useChatStore.getState()
+      if (
+        store.activeConversation?.id === convId &&
+        message.sender_id !== currentUserId
+      ) {
+        socket.emit('message_read', {
+          conversation_id: convId,
+          conversation_type: message.conversation_type || store.activeType,
+        })
+        useChatStore.getState().clearUnread?.(convId)
+      }
+
       if (message.conversation_type === 'group') {
         upsertGroup({
           id: convId,
@@ -55,11 +75,62 @@ export default function useSocketEvents() {
     // ─── Message delivered ───
     const onDelivered = ({ message_id, conversation_id }) => {
       updateMessage(conversation_id, message_id, { status: 'delivered' })
+      // Update conversation sidebar last_message status
+      const store = useChatStore.getState()
+      const conv = store.conversations.find((c) => c.id === conversation_id)
+      const lastMsgId = conv?.last_message?._id || conv?.last_message?.id
+      if (lastMsgId && lastMsgId === message_id) {
+        upsertConversation({
+          id: conversation_id,
+          last_message: { ...conv.last_message, status: 'delivered' },
+        })
+      }
     }
 
-    // ─── Message read ───
-    const onRead = ({ message_id, conversation_id }) => {
-      updateMessage(conversation_id, message_id, { status: 'read' })
+    // ─── Single message read ───
+    const onRead = ({ message_id, conversation_id, reader_id, reader_avatar_url, reader_display_name, read_at }) => {
+      const readInfo = { reader_id, reader_avatar_url, reader_display_name, read_at }
+      updateMessage(conversation_id, message_id, { status: 'read', read_by: readInfo })
+      // Update conversation sidebar last_message with seen info
+      const store = useChatStore.getState()
+      const conv = store.conversations.find((c) => c.id === conversation_id)
+      const lastMsgId = conv?.last_message?._id || conv?.last_message?.id
+      if (lastMsgId && lastMsgId === message_id) {
+        upsertConversation({
+          id: conversation_id,
+          last_message: { ...conv.last_message, status: 'read', read_by: readInfo },
+        })
+      }
+    }
+
+    // ─── Bulk messages read (when receiver opens the conversation) ───
+    const onBulkRead = ({ message_ids, conversation_id, reader_id, reader_avatar_url, reader_display_name, read_at }) => {
+      const readInfo = { reader_id, reader_avatar_url, reader_display_name, read_at }
+      const store = useChatStore.getState()
+      const currentUserId = useAuthStore.getState().user?.id
+
+      // Mark ALL own messages in that conversation as 'read'
+      const convMessages = store.messages[conversation_id] || []
+      if (convMessages.length > 0) {
+        const updated = convMessages.map((m) => {
+          if (m.sender_id === currentUserId && m.status !== 'read') {
+            return { ...m, status: 'read', read_by: readInfo }
+          }
+          return m
+        })
+        useChatStore.setState((state) => ({
+          messages: { ...state.messages, [conversation_id]: updated },
+        }))
+      }
+
+      // Update conversation sidebar last_message with seen info
+      const conv = store.conversations.find((c) => c.id === conversation_id)
+      if (conv?.last_message && conv.last_message.sender_id === currentUserId) {
+        upsertConversation({
+          id: conversation_id,
+          last_message: { ...conv.last_message, status: 'read', read_by: readInfo },
+        })
+      }
     }
 
     // ─── Message edited ───
@@ -188,6 +259,7 @@ export default function useSocketEvents() {
     socket.on('new_message', onNewMessage)
     socket.on('message_delivered', onDelivered)
     socket.on('message_read', onRead)
+    socket.on('messages_read', onBulkRead)
     socket.on('message_edited', onEdited)
     socket.on('message_deleted', onDeleted)
     socket.on('reaction_update', onReaction)
@@ -208,6 +280,7 @@ export default function useSocketEvents() {
       socket.off('new_message', onNewMessage)
       socket.off('message_delivered', onDelivered)
       socket.off('message_read', onRead)
+      socket.off('messages_read', onBulkRead)
       socket.off('message_edited', onEdited)
       socket.off('message_deleted', onDeleted)
       socket.off('reaction_update', onReaction)

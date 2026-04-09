@@ -16,10 +16,11 @@ import ReactionPicker from './ReactionPicker'
 import ReplyPreview from './ReplyPreview'
 import MediaLightbox from '@/components/ui/MediaLightbox'
 
-export default function MessageItem({ message, isOwn, conversationId, previousMessage }) {
+export default function MessageItem({ message, isOwn, conversationId, previousMessage, isLastReadMessage }) {
   const [showActions, setShowActions] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [showStatusPopup, setShowStatusPopup] = useState(false)
   const { setReplyTo, updateMessage, deleteMessage } = useChatStore()
   const { user } = useAuthStore()
   const socket = getSocket()
@@ -53,10 +54,39 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
     if (!isOwn) return null
     const status = msg.status
     if (status === 'pending') return <Clock className="w-3 h-3 text-text-muted" />
-    if (status === 'sent') return <Check className="w-3 h-3 text-text-muted" />
     if (status === 'delivered') return <CheckCheck className="w-3 h-3 text-text-muted" />
     if (status === 'read') return <CheckCheck className="w-3 h-3 text-accent-yellow" />
-    return <CheckCheck className="w-3 h-3 text-text-muted" />
+    // Default: single tick ('sent' or any unknown status)
+    return <Check className="w-3 h-3 text-text-muted" />
+  }
+
+  // Format status label for the popup
+  const getStatusLabel = () => {
+    const status = msg.status
+    if (status === 'pending') return 'Sending...'
+    if (status === 'delivered') return 'Delivered'
+    if (status === 'read') {
+      const readAt = msg.read_by?.read_at
+      if (readAt) {
+        const diff = Date.now() - new Date(readAt).getTime()
+        const mins = Math.floor(diff / 60000)
+        const hours = Math.floor(diff / 3600000)
+        const days = Math.floor(diff / 86400000)
+        let timeAgo = 'just now'
+        if (days > 0) timeAgo = `${days} day${days > 1 ? 's' : ''} ago`
+        else if (hours > 0) timeAgo = `${hours} hour${hours > 1 ? 's' : ''} ago`
+        else if (mins > 0) timeAgo = `${mins} minute${mins > 1 ? 's' : ''} ago`
+        return `Seen ${timeAgo}`
+      }
+      return 'Seen'
+    }
+    return 'Sent'
+  }
+
+  const handleBubbleClick = () => {
+    if (isOwn && !isDeleted) {
+      setShowStatusPopup((prev) => !prev)
+    }
   }
 
   const handleReact = async (emoji) => {
@@ -125,10 +155,11 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
         {/* Bubble */}
         <div
           className={clsx(
-            'relative',
+            'relative cursor-pointer',
             isOwn ? 'message-bubble-sent' : 'message-bubble-received',
             isDeleted && 'opacity-60 italic'
           )}
+          onClick={handleBubbleClick}
         >
           {isDeleted ? (
             <span className="flex items-center gap-1.5 text-sm">
@@ -145,11 +176,29 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
           )}
         </div>
 
+        {/* Status popup on click */}
+        {showStatusPopup && isOwn && (
+          <div className="mt-1 px-3 py-1.5 bg-bg-elevated border border-border rounded-xl shadow-lg text-xs text-text-secondary animate-scale-in">
+            {getStatusLabel()}
+          </div>
+        )}
+
         {/* Time + status row */}
         <div className={clsx('flex items-center gap-1 mt-0.5 px-1', isOwn ? 'flex-row-reverse' : '')}>
           <span className="text-[11px] text-text-muted">{formatMessageTime(msg.created_at)}</span>
           <StatusIcon />
         </div>
+
+        {/* Seen avatar — Messenger style: small profile pic below last read message */}
+        {isOwn && msg.status === 'read' && isLastReadMessage && (
+          <div className="flex justify-end pr-1 mt-0.5">
+            <Avatar
+              src={msg.read_by?.reader_avatar_url}
+              name={msg.read_by?.reader_display_name || '?'}
+              size="xs"
+            />
+          </div>
+        )}
 
         {/* Reactions */}
         {reactionSummary.length > 0 && (

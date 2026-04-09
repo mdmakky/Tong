@@ -183,8 +183,36 @@ const chatHandler = (io, socket) => {
         } catch (_) {}
       }
 
+      // ── Determine initial delivery status ──────────────────────────────
+      // For direct chats: check if receiver is ONLINE (connected to socket).
+      // Online = in their personal user:${id} room. This means "delivered".
+      // "Seen" only happens when they open the conversation (message_read).
+      let initialStatus = 'sent';
+      if (access.type !== 'group') {
+        const receiverId = access.conversation.participant_1 === userId
+          ? access.conversation.participant_2
+          : access.conversation.participant_1;
+        const receiverSockets = await io.in(`user:${receiverId}`).fetchSockets();
+        if (receiverSockets.length > 0) {
+          initialStatus = 'delivered';
+          // Persist delivered_to in DB (fire-and-forget)
+          Message.findByIdAndUpdate(message._id, {
+            $addToSet: { delivered_to: receiverId },
+          }).catch(() => {});
+        }
+      }
+      populated.status = initialStatus;
+
       // Broadcast to everyone in the conv room EXCEPT the sender
       socket.to(`conv:${conversation_id}`).emit('new_message', populated);
+
+      // If already delivered, notify sender in real-time
+      if (initialStatus === 'delivered') {
+        socket.emit('message_delivered', {
+          message_id: populated._id.toString(),
+          conversation_id,
+        });
+      }
 
       // Update conversation timestamp (for direct chats)
       if (access.type !== 'group') {
@@ -250,36 +278,33 @@ const chatHandler = (io, socket) => {
       if (!access) return;
       const readAt = new Date();
 
-      // Mark one message as read
+      // ── Single message read ──────────────────────────────────────────
       if (message_id) {
         await Message.findOneAndUpdate(
           { _id: message_id, conversation_id: targetConversationId },
-          {
-            $addToSet: {
-              read_receipts: { user_id: userId, read_at: readAt },
-            },
-          }
+          { $addToSet: { read_receipts: { user_id: userId, read_at: readAt } } }
         );
 
+        // Notify the room (sender receives this) with reader info for seen avatar
         socket.to(`conv:${targetConversationId}`).emit('message_read', {
           message_id,
           conversation_id: targetConversationId,
-          user_id: userId,
+          reader_id: userId,
+          reader_avatar_url: socket.user.avatar_url,
+          reader_display_name: socket.user.display_name,
           read_at: readAt,
         });
       }
 
-      // Track member read state in group chats when a conversation is opened
+      // ── Group: update member last_read_at ──────────────────────────
       if (access.type === 'group') {
         await prisma.groupMember.update({
-          where: {
-            group_id_user_id: { group_id: targetConversationId, user_id: userId },
-          },
+          where: { group_id_user_id: { group_id: targetConversationId, user_id: userId } },
           data: { last_read_at: readAt },
         });
       } else if (!message_id) {
-        // Direct chats send message_read with conversation_id only; persist read state for all unread messages.
-        await Message.updateMany(
+        // ── Direct chat bulk read: find unread messages then mark + notify ──
+        const unreadMessages = await Message.find(
           {
             conversation_id: targetConversationId,
             sender_id: { $ne: userId },
@@ -288,12 +313,27 @@ const chatHandler = (io, socket) => {
             deleted_for: { $ne: userId },
             'read_receipts.user_id': { $ne: userId },
           },
-          {
-            $addToSet: {
-              read_receipts: { user_id: userId, read_at: readAt },
-            },
-          }
-        );
+          '_id'
+        ).lean();
+
+        if (unreadMessages.length > 0) {
+          const messageIds = unreadMessages.map((m) => m._id.toString());
+
+          await Message.updateMany(
+            { _id: { $in: messageIds } },
+            { $addToSet: { read_receipts: { user_id: userId, read_at: readAt } } }
+          );
+
+          // Notify the sender (everyone in room except reader) in real-time
+          socket.to(`conv:${targetConversationId}`).emit('messages_read', {
+            message_ids: messageIds,
+            conversation_id: targetConversationId,
+            reader_id: userId,
+            reader_avatar_url: socket.user.avatar_url,
+            reader_display_name: socket.user.display_name,
+            read_at: readAt,
+          });
+        }
       }
     } catch (err) {
       console.error('message_read error:', err.message);
