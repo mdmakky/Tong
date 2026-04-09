@@ -100,11 +100,11 @@ export const getGroups = async (req, res, next) => {
 
         const unreadCount = m.last_read_at
           ? await Message.countDocuments({
-              conversation_id: m.group_id,
-              conversation_type: 'group',
-              created_at: { $gt: m.last_read_at },
-              sender_id: { $ne: req.user.id },
-            })
+            conversation_id: m.group_id,
+            conversation_type: 'group',
+            created_at: { $gt: m.last_read_at },
+            sender_id: { $ne: req.user.id },
+          })
           : 0;
 
         return {
@@ -170,12 +170,12 @@ export const searchPublicGroups = async (req, res, next) => {
     const groupIds = groups.map((g) => g.id);
     const memberships = groupIds.length
       ? await prisma.groupMember.findMany({
-          where: {
-            user_id: req.user.id,
-            group_id: { in: groupIds },
-          },
-          select: { group_id: true, role: true },
-        })
+        where: {
+          user_id: req.user.id,
+          group_id: { in: groupIds },
+        },
+        select: { group_id: true, role: true },
+      })
       : [];
 
     const membershipByGroupId = Object.fromEntries(
@@ -271,14 +271,14 @@ export const createGroup = async (req, res, next) => {
 
     // Add initial members
     if (initialMemberIds.length > 0) {
-        await prisma.groupMember.createMany({
-          data: initialMemberIds.map((user_id) => ({
-            group_id: group.id,
-            user_id,
-            role: 'member',
-          })),
-          skipDuplicates: true,
-        });
+      await prisma.groupMember.createMany({
+        data: initialMemberIds.map((user_id) => ({
+          group_id: group.id,
+          user_id,
+          role: 'member',
+        })),
+        skipDuplicates: true,
+      });
     }
 
     // System message

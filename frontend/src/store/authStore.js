@@ -61,15 +61,16 @@ const useAuthStore = create(
       },
 
       logout: async () => {
-        try {
-          await api.post('/auth/logout')
-        } catch (_) {}
+        // Clear tokens FIRST so any 401 from the logout API call
+        // does not re-trigger the interceptor → forceLogout loop
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         localStorage.removeItem('activeChatSelection')
         localStorage.removeItem('sidebarTab')
         disconnectSocket()
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
+        // Fire-and-forget — we don't care if the server rejects it
+        api.post('/auth/logout').catch(() => {})
       },
 
       fetchMe: async () => {

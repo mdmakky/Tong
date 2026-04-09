@@ -17,9 +17,15 @@ const handleDbConnectionError = (label, err) => {
 };
 
 // ─── Prisma (PostgreSQL) ───────────────────────
-export const prisma = new PrismaClient({
-  log: env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
-});
+// Singleton pattern: reuse the same PrismaClient instance across nodemon restarts
+// in development to prevent connection pool exhaustion.
+const globalForPrisma = globalThis
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log: env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+  })
+if (env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
 
 // ─── MongoDB ───────────────────────────────────
 const isSrvDnsError = (err) =>

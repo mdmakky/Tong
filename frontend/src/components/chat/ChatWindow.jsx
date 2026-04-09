@@ -105,6 +105,18 @@ export default function ChatWindow() {
 
   const grouped = groupMessagesByDate(convMessages)
 
+  // Find the last own message with status='read' — only that one shows the seen avatar (Messenger-style)
+  let lastReadOwnMsgId = null
+  for (let i = grouped.length - 1; i >= 0; i--) {
+    const item = grouped[i]
+    if (item.type === 'separator') continue
+    const d = item.data
+    if (d.sender_id === user?.id && d.status === 'read') {
+      lastReadOwnMsgId = d._id || d.id
+      break
+    }
+  }
+
   const typingNames = (typingUsers[convId] || [])
     .filter((u) => u.user_id !== user?.id)
     .map((u) => u.display_name)
@@ -141,6 +153,7 @@ export default function ChatWindow() {
             if (item.type === 'separator') {
               return <DateSeparator key={item.key} date={item.date} />
             }
+            const msgId = item.data._id || item.data.id
             return (
               <MessageItem
                 key={item.key}
@@ -148,6 +161,7 @@ export default function ChatWindow() {
                 previousMessage={grouped[grouped.indexOf(item) - 1]?.data}
                 isOwn={item.data.sender_id === user?.id}
                 conversationId={convId}
+                isLastReadMessage={msgId === lastReadOwnMsgId}
               />
             )
           }}

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import env from '../config/env.js';
 import { prisma } from '../config/database.js';
+import Message from '../models/Message.js';
 import chatHandler from './chatHandler.js';
 import presenceHandler from './presenceHandler.js';
 import groupHandler from './groupHandler.js';
@@ -63,6 +64,59 @@ const initializeSocket = (io) => {
       });
       convs.forEach(({ id }) => socket.join(`conv:${id}`));
     } catch (_) {}
+
+    // ── Auto-deliver pending messages ────────────────────────────────
+    // When a user comes online, mark all undelivered messages TO them as delivered
+    // and notify each sender in real-time.
+    try {
+      const myUserId = socket.user.id;
+      const undelivered = await Message.find({
+        conversation_type: { $in: ['direct'] },
+        sender_id: { $ne: myUserId },
+        delivered_to: { $ne: myUserId },
+        is_deleted: false,
+        deleted_for_all: false,
+      })
+        .select('_id conversation_id sender_id')
+        .lean();
+
+      // Filter to only conversations this user is part of
+      const myConvIds = new Set((await prisma.conversation.findMany({
+        where: { OR: [{ participant_1: myUserId }, { participant_2: myUserId }] },
+        select: { id: true },
+      })).map((c) => c.id));
+
+      const relevant = undelivered.filter((m) => myConvIds.has(m.conversation_id));
+
+      if (relevant.length > 0) {
+        const msgIds = relevant.map((m) => m._id);
+        await Message.updateMany(
+          { _id: { $in: msgIds } },
+          { $addToSet: { delivered_to: myUserId } }
+        );
+
+        // Group by sender and notify each sender
+        const bySender = {};
+        for (const m of relevant) {
+          if (!bySender[m.sender_id]) bySender[m.sender_id] = [];
+          bySender[m.sender_id].push({
+            message_id: m._id.toString(),
+            conversation_id: m.conversation_id,
+          });
+        }
+
+        for (const [senderId, msgs] of Object.entries(bySender)) {
+          for (const { message_id, conversation_id } of msgs) {
+            io.to(`user:${senderId}`).emit('message_delivered', {
+              message_id,
+              conversation_id,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Auto-deliver error:', err.message);
+    }
 
     // Register all event handlers
     chatHandler(io, socket);
