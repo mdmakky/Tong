@@ -13,7 +13,7 @@ export default function ContactSearch() {
 
   const { data, isFetching } = useQuery({
     queryKey: ['user-search', query],
-    queryFn: () => userApi.search(query).then((r) => r.data.data),
+    queryFn: () => userApi.search(query).then((r) => r.data.data?.users ?? r.data.data ?? []),
     enabled: query.trim().length >= 2,
     staleTime: 5000,
   })
