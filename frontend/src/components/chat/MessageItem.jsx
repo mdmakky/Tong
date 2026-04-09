@@ -21,6 +21,8 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [showStatusPopup, setShowStatusPopup] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [editText, setEditText] = useState(message.content?.text || '')
   const { setReplyTo, updateMessage, deleteMessage } = useChatStore()
   const { user } = useAuthStore()
   const socket = getSocket()
@@ -97,7 +99,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
       try {
         const { data } = await messageApi.react(msg._id || msg.id, emoji)
         // Update locally if socket not available
-      } catch (_) {}
+      } catch (_) { }
     }
   }
 
@@ -116,6 +118,41 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
     navigator.clipboard.writeText(msg.content?.text || '')
     toast.success('Copied')
     setShowActions(false)
+  }
+
+  const handleEdit = async () => {
+    if (!editText.trim()) {
+      toast.error('Message cannot be empty')
+      return
+    }
+
+    if (editText === msg.content?.text) {
+      setEditMode(false)
+      return
+    }
+
+    try {
+      if (socket) {
+        socket.emit('edit_message', {
+          message_id: msg._id || msg.id,
+          text: editText.trim(),
+        })
+      } else {
+        await messageApi.edit(msg._id || msg.id, editText.trim())
+      }
+
+      // Update locally
+      updateMessage(conversationId, msg._id || msg.id, {
+        content: { ...msg.content, text: editText.trim() },
+        is_edited: true,
+        edited_at: new Date(),
+      })
+
+      setEditMode(false)
+      toast.success('Message edited')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to edit message')
+    }
   }
 
   const reactionSummary = getReactionSummary(msg.reactions || [])
@@ -152,73 +189,104 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
         {/* Reply preview */}
         {msg.reply_to && <ReplyPreview messageId={msg.reply_to} isOwn={isOwn} conversationId={conversationId} />}
 
-        {/* Bubble */}
-        <div
-          className={clsx(
-            'relative cursor-pointer',
-            isOwn ? 'message-bubble-sent' : 'message-bubble-received',
-            isDeleted && 'opacity-60 italic'
-          )}
-          onClick={handleBubbleClick}
-        >
-          {isDeleted ? (
-            <span className="flex items-center gap-1.5 text-sm">
-              <AlertCircle className="w-3.5 h-3.5" />
-              This message was deleted
-            </span>
-          ) : (
-            <MessageContent message={msg} onImageClick={() => setLightboxOpen(true)} />
-          )}
-
-          {/* Edited label */}
-          {msg.edited_at && !isDeleted && (
-            <span className="text-[10px] opacity-60 ml-1">(edited)</span>
-          )}
-        </div>
-
-        {/* Status popup on click */}
-        {showStatusPopup && isOwn && (
-          <div className="mt-1 px-3 py-1.5 bg-bg-elevated border border-border rounded-xl shadow-lg text-xs text-text-secondary animate-scale-in">
-            {getStatusLabel()}
-          </div>
-        )}
-
-        {/* Time + status row */}
-        <div className={clsx('flex items-center gap-1 mt-0.5 px-1', isOwn ? 'flex-row-reverse' : '')}>
-          <span className="text-[11px] text-text-muted">{formatMessageTime(msg.created_at)}</span>
-          <StatusIcon />
-        </div>
-
-        {/* Seen avatar — Messenger style: small profile pic below last read message */}
-        {isOwn && msg.status === 'read' && isLastReadMessage && (
-          <div className="flex justify-end pr-1 mt-0.5">
-            <Avatar
-              src={msg.read_by?.reader_avatar_url}
-              name={msg.read_by?.reader_display_name || '?'}
-              size="xs"
+        {/* Edit Mode */}
+        {editMode && isOwn ? (
+          <div className="flex gap-2 items-center bg-bg-tertiary border border-border rounded-lg px-3 py-2 mb-1">
+            <input
+              type="text"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              className="flex-1 bg-transparent text-sm text-text-primary outline-none border-none"
+              placeholder="Edit message..."
+              autoFocus
             />
+            <button
+              onClick={handleEdit}
+              className="px-3 py-1 bg-accent-yellow text-black text-sm rounded font-medium hover:bg-accent-yellow-dim transition-colors"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => {
+                setEditMode(false)
+                setEditText(msg.content?.text || '')
+              }}
+              className="px-3 py-1 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors"
+            >
+              Cancel
+            </button>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Bubble */}
+            <div
+              className={clsx(
+                'relative cursor-pointer',
+                isOwn ? 'message-bubble-sent' : 'message-bubble-received',
+                isDeleted && 'opacity-60 italic'
+              )}
+              onClick={handleBubbleClick}
+            >
+              {isDeleted ? (
+                <span className="flex items-center gap-1.5 text-sm">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  This message was deleted
+                </span>
+              ) : (
+                <MessageContent message={msg} onImageClick={() => setLightboxOpen(true)} />
+              )}
 
-        {/* Reactions */}
-        {reactionSummary.length > 0 && (
-          <div className={clsx('flex items-center gap-1 mt-1 flex-wrap', isOwn ? 'justify-end' : 'justify-start')}>
-            {reactionSummary.map(([emoji, count]) => (
-              <button
-                key={emoji}
-                onClick={() => handleReact(emoji)}
-                className={clsx(
-                  'flex items-center gap-1 text-sm bg-bg-elevated border rounded-full px-2 py-0.5 transition-all reaction-btn',
-                  hasReacted(msg.reactions, user?.id, emoji)
-                    ? 'border-accent-yellow/50 bg-accent-yellow/10'
-                    : 'border-border hover:border-border-subtle'
-                )}
-              >
-                <span>{emoji}</span>
-                <span className="text-[11px] text-text-secondary">{count}</span>
-              </button>
-            ))}
-          </div>
+              {/* Edited label */}
+              {msg.edited_at && !isDeleted && (
+                <span className="text-[10px] opacity-60 ml-1">(edited)</span>
+              )}
+            </div>
+
+            {/* Status popup on click */}
+            {showStatusPopup && isOwn && (
+              <div className="mt-1 px-3 py-1.5 bg-bg-elevated border border-border rounded-xl shadow-lg text-xs text-text-secondary animate-scale-in">
+                {getStatusLabel()}
+              </div>
+            )}
+
+            {/* Time + status row */}
+            <div className={clsx('flex items-center gap-1 mt-0.5 px-1', isOwn ? 'flex-row-reverse' : '')}>
+              <span className="text-[11px] text-text-muted">{formatMessageTime(msg.created_at)}</span>
+              <StatusIcon />
+            </div>
+
+            {/* Seen avatar — Messenger style: small profile pic below last read message */}
+            {isOwn && msg.status === 'read' && isLastReadMessage && (
+              <div className="flex justify-end pr-1 mt-0.5">
+                <Avatar
+                  src={msg.read_by?.reader_avatar_url}
+                  name={msg.read_by?.reader_display_name || '?'}
+                  size="xs"
+                />
+              </div>
+            )}
+
+            {/* Reactions */}
+            {reactionSummary.length > 0 && (
+              <div className={clsx('flex items-center gap-1 mt-1 flex-wrap', isOwn ? 'justify-end' : 'justify-start')}>
+                {reactionSummary.map(([emoji, count]) => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleReact(emoji)}
+                    className={clsx(
+                      'flex items-center gap-1 text-sm bg-bg-elevated border rounded-full px-2 py-0.5 transition-all reaction-btn',
+                      hasReacted(msg.reactions, user?.id, emoji)
+                        ? 'border-accent-yellow/50 bg-accent-yellow/10'
+                        : 'border-border hover:border-border-subtle'
+                    )}
+                  >
+                    <span>{emoji}</span>
+                    <span className="text-[11px] text-text-secondary">{count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -260,7 +328,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
             isOwn={isOwn}
             onCopy={handleCopy}
             onDelete={handleDelete}
-            onEdit={isOwn ? () => {} : undefined}
+            onEdit={isOwn ? () => setEditMode(true) : undefined}
           />
         </div>
       )}
