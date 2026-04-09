@@ -1,11 +1,11 @@
-import { Phone, Video, Search, MoreVertical, ChevronRight, ArrowLeft } from 'lucide-react'
+import { Phone, Video, Search, MoreVertical, ChevronRight, ArrowLeft, Pin } from 'lucide-react'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import Avatar from '@/components/ui/Avatar'
 import { formatLastSeen } from '@/utils/helpers'
 
 export default function ChatHeader() {
-  const { activeConversation, activeType, presenceMap, typingUsers, toggleInfoPanel, showInfoPanel, setActiveConversation } = useChatStore()
+  const { activeConversation, activeType, presenceMap, typingUsers, toggleInfoPanel, showInfoPanel, setActiveConversation, pinnedConversations, pinnedGroups, togglePinConversation, togglePinGroup } = useChatStore()
   const { user } = useAuthStore()
 
   if (!activeConversation) return null
@@ -78,6 +78,19 @@ export default function ChatHeader() {
         </button>
         <button className="icon-btn" title="Search in conversation">
           <Search className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => {
+            if (isGroup) {
+              togglePinGroup(convId)
+            } else {
+              togglePinConversation(convId)
+            }
+          }}
+          className={`icon-btn ${(isGroup ? pinnedGroups : pinnedConversations).includes(convId) ? 'text-accent-yellow' : ''}`}
+          title={`${(isGroup ? pinnedGroups : pinnedConversations).includes(convId) ? 'Unpin' : 'Pin'} ${isGroup ? 'group' : 'conversation'}`}
+        >
+          <Pin className="w-5 h-5" />
         </button>
         <button
           onClick={toggleInfoPanel}

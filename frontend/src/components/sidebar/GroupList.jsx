@@ -23,16 +23,30 @@ export default function GroupList() {
     setActiveConversation,
     removeGroup,
     unreadCounts,
+    pinnedGroups,
   } = useChatStore()
 
   const searchNeedle = search.trim().toLowerCase()
-  const filtered = groups.filter((g) => {
-    if (!searchNeedle) return true
-    return (
-      g.name?.toLowerCase().includes(searchNeedle) ||
-      g.unique_group_id?.toLowerCase().includes(searchNeedle)
-    )
-  })
+  const filtered = groups
+    .filter((g) => {
+      if (!searchNeedle) return true
+      return (
+        g.name?.toLowerCase().includes(searchNeedle) ||
+        g.unique_group_id?.toLowerCase().includes(searchNeedle)
+      )
+    })
+    .sort((a, b) => {
+      // Pinned groups first
+      const aPinned = pinnedGroups.includes(a.id)
+      const bPinned = pinnedGroups.includes(b.id)
+      if (aPinned && !bPinned) return -1
+      if (!aPinned && bPinned) return 1
+
+      // Then sort by last message time (most recent first)
+      const aTime = new Date(a.last_message_at || a.last_message?.created_at || a.created_at).getTime()
+      const bTime = new Date(b.last_message_at || b.last_message?.created_at || b.created_at).getTime()
+      return bTime - aTime
+    })
 
   const handleDeleteGroupChat = async (group) => {
     if (!group?.id || busyGroupId) return
@@ -93,6 +107,7 @@ export default function GroupList() {
           const unread = unreadCounts[group.id] || 0
           const isActive = activeConversation?.id === group.id
           const isBusy = busyGroupId === group.id
+          const isPinned = pinnedGroups.includes(group.id)
           const groupIdLabel = group.unique_group_id ? `@${group.unique_group_id}` : null
 
           return (
@@ -124,9 +139,6 @@ export default function GroupList() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={clsx('text-xs truncate', unread > 0 ? 'text-text-secondary font-medium' : 'text-text-muted')}>
-                      {groupIdLabel
-                        ? `${groupIdLabel} · `
-                        : ''}
                       {group.last_message
                         ? truncate(group.last_message?.content?.text || 'Media', 35)
                         : `${group._count?.members || group.member_count || 0} members`}
