@@ -1,46 +1,39 @@
-import nodemailer from 'nodemailer';
 import env from '../config/env.js';
 
-// Create reusable transporter — Gmail SMTP with App Password
-const transporter = nodemailer.createTransport({
-  host: env.SMTP_HOST,
-  port: env.SMTP_PORT,
-  secure: env.SMTP_PORT === 465, // true for 465, false for other ports
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASSWORD,
-  },
-});
-
-// Verify connection on startup (non-blocking)
-transporter.verify().then(() => {
-  console.log('✅ SMTP email service ready');
-}).catch((err) => {
-  console.warn('⚠️  SMTP not ready:', err.message, '— emails may fail');
-});
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 /**
- * Send an email
+ * Send a transactional email via Brevo REST API
  */
 const sendEmail = async ({ to, subject, html, text }) => {
-  try {
-    const info = await transporter.sendMail({
-      from: `"${env.SMTP_FROM_NAME}" <${env.SMTP_FROM_EMAIL}>`,
-      to,
-      subject,
-      html,
-      text,
-    });
+  const body = {
+    sender: { name: env.BREVO_FROM_NAME, email: env.BREVO_FROM_EMAIL },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html,
+    textContent: text,
+  };
 
-    if (env.NODE_ENV === 'development') {
-      console.log('📧 Email sent:', info.messageId);
-    }
+  const res = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': env.BREVO_API_KEY,
+    },
+    body: JSON.stringify(body),
+  });
 
-    return info;
-  } catch (err) {
-    console.error('❌ Email send error:', err.message);
-    throw err;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    console.error('❌ Brevo email error:', err);
+    throw new Error(err.message || `Brevo API error: ${res.status}`);
   }
+
+  if (env.NODE_ENV === 'development') {
+    console.log('📧 Email sent via Brevo to:', to);
+  }
+
+  return res.json();
 };
 
 /**

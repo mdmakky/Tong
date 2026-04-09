@@ -21,7 +21,7 @@ const TABS = [
 ]
 
 export default function Sidebar() {
-  const { sidebarTab, setSidebarTab, unreadCounts } = useChatStore()
+  const { sidebarTab, setSidebarTab, unreadCounts, conversations, groups } = useChatStore()
   const { user, logout } = useAuthStore()
   const [showSettings, setShowSettings] = useState(false)
   const [settingsTab, setSettingsTab] = useState('profile')
@@ -30,7 +30,9 @@ export default function Sidebar() {
   const openProfile = () => { setSettingsTab('profile'); setShowSettings(true) }
   const openSettings = () => { setSettingsTab('appearance'); setShowSettings(true) }
 
-  const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
+  // Calculate unread counts per tab
+  const chatsUnread = conversations.reduce((sum, conv) => sum + (unreadCounts[conv.id] || 0), 0)
+  const groupsUnread = groups.reduce((sum, group) => sum + (unreadCounts[group.id] || 0), 0)
 
   const statusColor = {
     online: 'bg-online',
@@ -62,9 +64,14 @@ export default function Sidebar() {
             title={tab.label}
           >
             <tab.icon className="w-5 h-5" />
-            {tab.id === 'chats' && totalUnread > 0 && (
+            {tab.id === 'chats' && chatsUnread > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-accent-yellow rounded-full text-black text-[10px] font-bold flex items-center justify-center">
-                {totalUnread > 9 ? '9+' : totalUnread}
+                {chatsUnread > 9 ? '9+' : chatsUnread}
+              </span>
+            )}
+            {tab.id === 'groups' && groupsUnread > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-accent-yellow rounded-full text-black text-[10px] font-bold flex items-center justify-center">
+                {groupsUnread > 9 ? '9+' : groupsUnread}
               </span>
             )}
           </button>

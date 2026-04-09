@@ -27,7 +27,7 @@ export default function MessageInput({ conversationId, conversationType }) {
   const typingTimerRef = useRef(null)
   const recordingIntervalRef = useRef(null)
 
-  const { replyTo, clearReplyTo, appendMessage, replaceMessage, removeMessage } = useChatStore()
+  const { replyTo, clearReplyTo, appendMessage, replaceMessage, removeMessage, upsertConversation, upsertGroup, activeConversation, activeType } = useChatStore()
   const { user } = useAuthStore()
   const socket = useChatStore((s) => s.socket)
 
@@ -150,6 +150,21 @@ export default function MessageInput({ conversationId, conversationType }) {
               // Replace optimistic msg with the real one (status comes from server: 'sent' or 'delivered')
               const realMsg = { ...response.message, status: response.message.status || 'sent' }
               replaceMessage(conversationId, tempId, realMsg)
+
+              // Update sidebar conversation/group with new last message
+              if (conversationType === 'group') {
+                upsertGroup({
+                  id: conversationId,
+                  last_message: realMsg,
+                  last_message_at: realMsg.created_at,
+                })
+              } else {
+                upsertConversation({
+                  id: conversationId,
+                  last_message: realMsg,
+                  last_message_at: realMsg.created_at,
+                })
+              }
             } else {
               // Remove the optimistic message and show error
               removeMessage(conversationId, tempId)
@@ -158,7 +173,23 @@ export default function MessageInput({ conversationId, conversationType }) {
           })
         } else {
           const { data } = await api.sendMessage(conversationId, payload)
-          appendMessage(conversationId, data.data)
+          const message = data.data
+          appendMessage(conversationId, message)
+
+          // Update sidebar conversation/group with new last message
+          if (conversationType === 'group') {
+            upsertGroup({
+              id: conversationId,
+              last_message: message,
+              last_message_at: message.created_at,
+            })
+          } else {
+            upsertConversation({
+              id: conversationId,
+              last_message: message,
+              last_message_at: message.created_at,
+            })
+          }
         }
       }
     } catch (err) {

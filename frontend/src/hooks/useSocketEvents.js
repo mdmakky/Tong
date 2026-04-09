@@ -168,6 +168,7 @@ export default function useSocketEvents() {
       if (payload.type === 'group') {
         if (payload.group?.id) {
           upsertGroup(payload.group)
+          incrementUnread(payload.group.id)
           socket.emit('join_conversation', {
             conversation_id: payload.group.id,
             conversation_type: 'group',
@@ -181,6 +182,7 @@ export default function useSocketEvents() {
             const group = data?.data
             if (!group?.id) return
             upsertGroup(group)
+            incrementUnread(group.id)
             socket.emit('join_conversation', {
               conversation_id: group.id,
               conversation_type: 'group',
@@ -192,6 +194,7 @@ export default function useSocketEvents() {
 
       if (!payload.id) return
       upsertConversation(payload)
+      incrementUnread(payload.id)
       socket.emit('join_conversation', {
         conversation_id: payload.id,
         conversation_type: payload.type,
