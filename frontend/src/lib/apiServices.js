@@ -55,6 +55,7 @@ export const messageApi = {
 export const groupApi = {
   list: () => api.get('/groups'),
   searchPublic: (q, params = {}) => api.get('/groups/public/search', { params: { q, ...params } }),
+  checkUniqueId: (uniqueGroupId) => api.get(`/groups/check-unique-id/${encodeURIComponent(uniqueGroupId)}`),
   create: (data) => api.post('/groups', data),
   get: (id) => api.get(`/groups/${id}`),
   update: (id, data) => api.put(`/groups/${id}`, data),
