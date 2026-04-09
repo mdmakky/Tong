@@ -7,8 +7,16 @@ function Feature({ title, desc }) {
   return (
     <div className="rounded-xl border border-border p-6">
       <h3 className="mb-2 font-bold text-text-primary">{title}</h3>
-      <p className="text-sm text-text-secondary">{desc}</p>
+      <p className="text-sm text-text-secondary leading-relaxed">{desc}</p>
     </div>
+  )
+}
+
+function InternalLink({ to, children }) {
+  return (
+    <a href={to} className="text-accent-yellow hover:text-accent-yellow-dim">
+      {children}
+    </a>
   )
 }
 
@@ -25,6 +33,19 @@ export default function LandingPage() {
 
   return (
     <main className="landing-bg min-h-screen text-text-primary">
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          "mainEntity": {
+            "@type": "SoftwareApplication",
+            "name": "Tong Chat",
+            "description": "Secure real-time messaging app for instant communication",
+            "url": "https://tongchat.app",
+          }
+        })}
+      </script>
+
       {/* Header Nav */}
       <nav className="border-b border-border/20 sticky top-0 z-40 bg-bg-primary/80 backdrop-blur-md">
         <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -54,10 +75,13 @@ export default function LandingPage() {
               Secure Messaging Platform
             </p>
             <h1 className="text-4xl font-bold leading-tight md:text-6xl">
-              Fast, secure messaging for teams &amp; friends
+              Tong Chat: Secure Real-Time Messaging for Teams &amp; Friends
             </h1>
             <p className="mt-6 max-w-xl text-base text-text-secondary md:text-lg leading-relaxed">
-              Tong Chat is a real-time messaging app designed for instant communication. Send private messages, create group chats, share files, and connect across all your devices with military-grade encryption and privacy-first design.
+              Tong Chat is a fast, secure real-time messaging and chat app designed for instant communication. Send private messages to friends, create group chats for teams, share files and photos, and connect across all your devices with end-to-end encryption and privacy-first design. Perfect for personal messaging, team collaboration, and group conversations.
+            </p>
+            <p className="mt-4 max-w-xl text-sm text-text-muted md:text-base leading-relaxed">
+              Join thousands of users enjoying secure, instant messaging. Tong Chat offers a modern chat experience with low-latency real-time delivery, message reactions, typing indicators, read receipts, and seamless cross-device synchronization.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-4">
@@ -110,9 +134,12 @@ export default function LandingPage() {
       <section className="border-t border-border/20 bg-bg-secondary/30 py-16 sm:py-24">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="mb-12 text-center">
-            <h2 className="mb-4 text-3xl font-bold md:text-4xl">Messaging Features Built For Everyone</h2>
-            <p className="text-text-secondary">Everything you need for secure, instant conversations</p>
+            <h2 className="mb-4 text-3xl font-bold md:text-4xl">Secure Messaging Features For Everyone</h2>
+            <p className="text-text-secondary">Chat, collaborate, and stay connected with Tong Chat's powerful secure messaging features</p>
           </div>
+          <p className="mb-8 max-w-2xl mx-auto text-center text-text-secondary leading-relaxed">
+            Whether you're sending direct messages to friends, organizing group chats for work teams, or sharing media files, Tong Chat provides everything you need for secure and instant communication. Our messaging platform is optimized for speed, security, and simplicity.
+          </p>
           <div className="grid gap-8 md:grid-cols-3">
             <Feature title="Direct Messages" desc="One-on-one private chats with read receipts and typing indicators" />
             <Feature title="Group Chats" desc="Create public or private groups with role-based permissions" />
@@ -124,11 +151,29 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* About Section */}
+      <section className="border-t border-border/20 bg-bg-secondary/20 py-16 sm:py-24">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="mb-6 text-3xl font-bold md:text-4xl">Why Tong Chat is the Best Messaging App</h2>
+            <p className="mb-4 text-text-secondary leading-relaxed">
+              In today's world, secure communication is essential. Tong Chat combines military-grade security with user-friendly design to provide the best instant messaging experience. Unlike other chat apps, Tong Chat prioritizes your privacy without sacrificing speed or features.
+            </p>
+            <p className="mb-4 text-text-secondary leading-relaxed">
+              Our real-time messaging infrastructure ensures messages are delivered instantly across all devices. Whether you're using an instant messenger for casual conversations or group messaging for business collaboration, Tong Chat scales to meet your needs.
+            </p>
+            <p className="text-text-secondary leading-relaxed">
+              Start using Tong Chat today for free. No credit card required. Experience the most secure, fast, and user-friendly chat application on the market.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-16 sm:py-24">
         <div className="mx-auto max-w-2xl px-4 text-center sm:px-6">
-          <h2 className="mb-4 text-3xl font-bold md:text-4xl">Ready to Connect?</h2>
-          <p className="mb-8 text-text-secondary md:text-lg">Join thousands of users communicating on Tong Chat today. It's free, secure, and takes 2 minutes to get started.</p>
+          <h2 className="mb-4 text-3xl font-bold md:text-4xl">Ready to Start Secure Messaging?</h2>
+          <p className="mb-8 text-text-secondary md:text-lg">Join thousands of users enjoying secure instant messaging on Tong Chat. It's completely free and takes just 2 minutes to get started with our messaging app.</p>
           <Link to={isAuthenticated ? '/app' : '/register'} className="btn-primary inline-block px-8 py-4 font-medium">
             Create Your Account Now
           </Link>
