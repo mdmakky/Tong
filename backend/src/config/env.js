@@ -25,13 +25,10 @@ const env = {
     .filter(Boolean),
   REDIS_URL: process.env.REDIS_URL,
 
-  // SMTP (Gmail)
-  SMTP_HOST: process.env.SMTP_HOST,
-  SMTP_PORT: parseInt(process.env.SMTP_PORT, 10) || 587,
-  SMTP_USER: process.env.SMTP_USER,
-  SMTP_PASSWORD: process.env.SMTP_PASSWORD,
-  SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL,
-  SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || 'Tong Messenger',
+  // Brevo (transactional email)
+  BREVO_API_KEY: process.env.BREVO_API_KEY,
+  BREVO_FROM_EMAIL: process.env.BREVO_FROM_EMAIL,
+  BREVO_FROM_NAME: process.env.BREVO_FROM_NAME || 'Tong Messenger',
 
   // Cloudinary
   CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
