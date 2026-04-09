@@ -34,16 +34,73 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Tong Chat",
-        "applicationCategory": "CommunicationApplication",
-        "operatingSystem": "Web",
-        "url": "https://tongchat.app/",
-        "description": "Secure real-time messaging app for private and group conversations.",
-        "publisher": {
-          "@type": "Organization",
-          "name": "Tong Chat"
-        }
+        "@graph": [
+          {
+            "@type": "WebApplication",
+            "@id": "https://tongchat.app/#webapp",
+            "name": "Tong Chat",
+            "description": "Secure real-time messaging app for instant communication with group chats, file sharing, and end-to-end encryption.",
+            "url": "https://tongchat.app/",
+            "applicationCategory": "CommunicationApplication",
+            "operatingSystem": "Web",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "author": {
+              "@type": "Organization",
+              "@id": "https://tongchat.app/#org",
+              "name": "Tong Chat"
+            }
+          },
+          {
+            "@type": "Organization",
+            "@id": "https://tongchat.app/#org",
+            "name": "Tong Chat",
+            "url": "https://tongchat.app/",
+            "logo": "https://tongchat.app/tong-icon.svg",
+            "description": "Real-time secure messaging platform for teams and friends"
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://tongchat.app/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is Tong Chat secure?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, Tong Chat provides end-to-end encryption for all messages and prioritizes user privacy and security."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is Tong Chat free?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, Tong Chat is completely free to use. Create an account and start messaging instantly."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I use Tong Chat on mobile and desktop?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, Tong Chat is a web-based application that works seamlessly on desktop, tablet, and mobile devices."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Does Tong Chat support group chats?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, you can create unlimited group chats with customizable permissions and member roles."
+                }
+              }
+            ]
+          }
+        ]
       }
     </script>
   </head>
