@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Search, UserPlus, Loader2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -8,14 +8,23 @@ import useChatStore from '@/store/chatStore'
 
 export default function ContactSearch() {
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const { setActiveConversation, upsertConversation } = useChatStore()
   const [starting, setStarting] = useState(null)
   const trimmedQuery = query.trim()
 
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedQuery(trimmedQuery)
+    }, 250)
+
+    return () => clearTimeout(handle)
+  }, [trimmedQuery])
+
   const { data, isFetching, isError, error } = useQuery({
-    queryKey: ['user-search', query],
-    queryFn: () => userApi.search(query).then((r) => r.data.data?.users ?? r.data.data ?? []),
-    enabled: trimmedQuery.length >= 2,
+    queryKey: ['user-search', debouncedQuery],
+    queryFn: () => userApi.search(debouncedQuery).then((r) => r.data.data?.users ?? r.data.data ?? []),
+    enabled: debouncedQuery.length >= 2,
     staleTime: 5000,
     retry: 1,
   })
@@ -61,12 +70,12 @@ export default function ContactSearch() {
             <Loader2 className="w-5 h-5 text-text-muted animate-spin" />
           </div>
         )}
-        {isError && trimmedQuery.length >= 2 && (
+        {isError && debouncedQuery.length >= 2 && (
           <p className="text-red-400 text-sm text-center py-8">
             {error?.response?.data?.message || 'Search failed. Please try again.'}
           </p>
         )}
-        {!isFetching && !isError && users.length === 0 && trimmedQuery.length >= 2 && (
+        {!isFetching && !isError && users.length === 0 && debouncedQuery.length >= 2 && (
           <p className="text-text-muted text-sm text-center py-8">No users found</p>
         )}
         {users.map((u) => (
