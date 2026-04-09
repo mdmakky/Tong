@@ -261,7 +261,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
                 <Avatar
                   src={msg.read_by?.reader_avatar_url}
                   name={msg.read_by?.reader_display_name || '?'}
-                  size="xs"
+                  size="2xs"
                 />
               </div>
             )}

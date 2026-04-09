@@ -3,10 +3,18 @@ import { Link } from 'react-router-dom'
 import { Mail, ArrowLeft, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '@/lib/apiServices'
+import useSeo from '@/hooks/useSeo'
 
 const STEPS = { EMAIL: 'email', OTP: 'otp', NEW_PW: 'new_password', DONE: 'done' }
 
 export default function ForgotPasswordPage() {
+  useSeo({
+    title: 'Reset Password',
+    description: 'Recover access to your Tong Chat account by resetting your password.',
+    canonicalPath: '/forgot-password',
+    noIndex: true,
+  })
+
   const [step, setStep] = useState(STEPS.EMAIL)
   const [email, setEmail] = useState('')
   const [otp, setOtp] = useState('')

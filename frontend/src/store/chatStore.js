@@ -79,7 +79,7 @@ const useChatStore = create((set, get) => ({
   replyTo: null,
   searchQuery: '',
   sidebarTab: readPersistedSidebarTab(), // 'chats' | 'groups' | 'contacts'
-  showInfoPanel: true,
+  showInfoPanel: false,
   pinnedConversations: JSON.parse(localStorage.getItem('pinnedConversations') || '[]'),
   pinnedGroups: JSON.parse(localStorage.getItem('pinnedGroups') || '[]'),
 
@@ -89,10 +89,14 @@ const useChatStore = create((set, get) => ({
 
   setActiveConversation: (conv, type) => {
     const resolvedType = type || conv?.type || null
+    const shouldCloseInfoPanelOnMobile =
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+
     set({
       activeConversation: conv,
       activeType: resolvedType,
       replyTo: null,
+      showInfoPanel: shouldCloseInfoPanelOnMobile ? false : get().showInfoPanel,
     })
     persistActiveChat(conv, resolvedType)
 

@@ -4,10 +4,18 @@ import { Eye, EyeOff, Lock, Mail, User, Phone, CheckCircle2, MessageCircle } fro
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
 import { authApi } from '@/lib/apiServices'
+import useSeo from '@/hooks/useSeo'
 
 const STEPS = { FORM: 'form', VERIFY: 'verify', SUCCESS: 'success' }
 
 export default function RegisterPage() {
+  useSeo({
+    title: 'Create Account',
+    description: 'Create a Tong Chat account to start messaging in real time.',
+    canonicalPath: '/register',
+    noIndex: true,
+  })
+
   const navigate = useNavigate()
   const { register: registerUser, isLoading } = useAuthStore()
 

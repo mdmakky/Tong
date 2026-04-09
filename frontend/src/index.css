@@ -19,15 +19,14 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow: hidden;
-    height: 100vh;
-    width: 100vw;
+    overflow-x: hidden;
+    min-height: 100vh;
+    width: 100%;
   }
 
   #root {
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden;
+    min-height: 100vh;
+    width: 100%;
   }
 
   /* Scrollbar */
@@ -171,6 +170,18 @@
   background: radial-gradient(ellipse at 20% 50%, rgba(232,212,77,0.08) 0%, transparent 50%),
               radial-gradient(ellipse at 80% 20%, rgba(232,212,77,0.05) 0%, transparent 40%),
               #111111;
+}
+
+.landing-bg {
+  background:
+    radial-gradient(circle at 10% 20%, rgba(232, 212, 77, 0.14), transparent 35%),
+    radial-gradient(circle at 85% 15%, rgba(232, 212, 77, 0.09), transparent 38%),
+    linear-gradient(160deg, #0f0f10 0%, #151516 60%, #101011 100%);
+}
+
+.landing-panel {
+  background: linear-gradient(180deg, rgba(29, 29, 31, 0.9) 0%, rgba(20, 20, 21, 0.86) 100%);
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.35);
 }
 
 /* Lightbox overlay */
