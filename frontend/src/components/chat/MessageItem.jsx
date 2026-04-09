@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import clsx from 'clsx'
 import {
   Check, CheckCheck, Clock, MoreHorizontal, Reply, Forward,
-  Pencil, Trash2, Pin, Smile, AlertCircle, FileText, Play,
+  Pencil, Trash2, Pin, Smile, AlertCircle, FileText, Play, Pause,
   Mic, Image as ImageIcon, MapPin
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -23,12 +23,14 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
   const [showStatusPopup, setShowStatusPopup] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [editText, setEditText] = useState(message.content?.text || '')
+  const [actionsLocked, setActionsLocked] = useState(false)
   const { setReplyTo, updateMessage, deleteMessage } = useChatStore()
   const { user } = useAuthStore()
   const socket = getSocket()
 
   const msg = message
   const isDeleted = msg.is_deleted_for_all
+  const isMediaMessage = ['image', 'video', 'audio'].includes(msg.message_type)
 
   // Check if this is a system event message (e.g. "X added Y")
   const isSystem = msg.message_type === 'system'
@@ -155,6 +157,30 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
     }
   }
 
+  const openEditMode = () => {
+    setEditText(msg.content?.text || '')
+    setEditMode(true)
+    setShowStatusPopup(false)
+  }
+
+  const cancelEdit = () => {
+    setEditMode(false)
+    setEditText(msg.content?.text || '')
+  }
+
+  const handleEditKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelEdit()
+      return
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleEdit()
+    }
+  }
+
   const reactionSummary = getReactionSummary(msg.reactions || [])
 
   return (
@@ -164,7 +190,12 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
         isOwn ? 'flex-row-reverse' : 'flex-row'
       )}
       onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => { setShowActions(false); setShowEmojiPicker(false) }}
+      onMouseLeave={() => {
+        if (!actionsLocked) {
+          setShowActions(false)
+          setShowEmojiPicker(false)
+        }
+      }}
     >
       {/* Avatar (only for received messages, first in a group) */}
       <div className="w-7 flex-shrink-0">
@@ -178,7 +209,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
       </div>
 
       {/* Message content */}
-      <div className={clsx('max-w-[70%] flex flex-col', isOwn ? 'items-end' : 'items-start')}>
+      <div className={clsx('relative max-w-[70%] flex flex-col', isOwn ? 'items-end' : 'items-start')}>
         {/* Sender name for group chats */}
         {showAvatar && !isOwn && sender?.display_name && (
           <span className="text-xs font-medium text-accent-yellow mb-1 ml-3">
@@ -191,30 +222,34 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
 
         {/* Edit Mode */}
         {editMode && isOwn ? (
-          <div className="w-full min-w-[260px] flex gap-2 items-center bg-bg-elevated border border-accent-yellow/40 rounded-xl px-3 py-2 mb-1 shadow-lg ring-1 ring-accent-yellow/15">
-            <input
-              type="text"
+          <div className="w-full min-w-[260px] max-w-[560px] bg-bg-elevated border border-accent-yellow/40 rounded-xl px-3 py-3 mb-1 shadow-lg ring-1 ring-accent-yellow/15">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-medium text-accent-yellow">Editing message</span>
+              <span className="text-[10px] text-text-muted">Enter to save, Esc to cancel</span>
+            </div>
+            <textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
-              className="flex-1 bg-bg-primary/80 border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-yellow/50"
+              onKeyDown={handleEditKeyDown}
+              rows={2}
+              className="w-full bg-bg-primary/80 border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-yellow/50 resize-none"
               placeholder="Edit message..."
               autoFocus
             />
-            <button
-              onClick={handleEdit}
-              className="px-3 py-2 bg-accent-yellow text-black text-sm rounded-lg font-semibold hover:bg-accent-yellow-dim transition-colors"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => {
-                setEditMode(false)
-                setEditText(msg.content?.text || '')
-              }}
-              className="px-3 py-2 bg-bg-primary border border-border text-text-primary text-sm rounded-lg hover:bg-surface-hover transition-colors"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center justify-end gap-2 mt-2">
+              <button
+                onClick={cancelEdit}
+                className="px-3 py-2 bg-bg-primary border border-border text-text-primary text-sm rounded-lg hover:bg-surface-hover transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEdit}
+                className="px-3 py-2 bg-accent-yellow text-black text-sm rounded-lg font-semibold hover:bg-accent-yellow-dim transition-colors"
+              >
+                Save
+              </button>
+            </div>
           </div>
         ) : (
           <>
@@ -222,7 +257,9 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
             <div
               className={clsx(
                 'relative cursor-pointer',
-                isOwn ? 'message-bubble-sent' : 'message-bubble-received',
+                isMediaMessage
+                  ? 'bg-transparent p-0 shadow-none'
+                  : (isOwn ? 'message-bubble-sent' : 'message-bubble-received'),
                 isDeleted && 'opacity-60 italic'
               )}
               onClick={handleBubbleClick}
@@ -288,50 +325,58 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
             )}
           </>
         )}
-      </div>
-
-      {/* Action buttons (appear on hover) */}
-      {showActions && !isDeleted && (
-        <div
-          className={clsx(
-            'flex items-center gap-1 self-center animate-fade-in',
-            isOwn ? 'flex-row-reverse mr-2' : 'ml-2'
-          )}
-        >
-          {/* Emoji react */}
-          <div className="relative">
-            <button
-              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-              className="icon-btn"
-              title="React"
-            >
-              <Smile className="w-4 h-4" />
-            </button>
-            {showEmojiPicker && (
-              <div className={clsx('absolute bottom-10 z-50', isOwn ? 'right-0' : 'left-0')}>
-                <ReactionPicker onSelect={handleReact} />
-              </div>
+        {/* Action buttons (overlay so messages do not shift) */}
+        {!isDeleted && (
+          <div
+            className={clsx(
+              'absolute top-1/2 -translate-y-1/2 z-20 flex items-center gap-1 transition-opacity duration-150',
+              isOwn ? 'right-full mr-1' : 'left-full ml-1 flex-row-reverse',
+              (showActions || actionsLocked) ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
             )}
-          </div>
-
-          {/* Reply */}
-          <button
-            onClick={() => setReplyTo(msg)}
-            className="icon-btn"
-            title="Reply"
           >
-            <Reply className="w-4 h-4" />
-          </button>
+            {/* Emoji react */}
+            <div className="relative">
+              <button
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="icon-btn p-1.5 md:p-2"
+                title="React"
+              >
+                <Smile className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              </button>
+              {showEmojiPicker && (
+                <div className={clsx('absolute bottom-10 z-50', isOwn ? 'right-0' : 'left-0')}>
+                  <ReactionPicker onSelect={handleReact} />
+                </div>
+              )}
+            </div>
 
-          {/* More actions */}
-          <MessageActionsMenu
-            isOwn={isOwn}
-            onCopy={handleCopy}
-            onDelete={handleDelete}
-            onEdit={isOwn ? () => setEditMode(true) : undefined}
-          />
-        </div>
-      )}
+            {/* Reply */}
+            <button
+              onClick={() => setReplyTo(msg)}
+              className="icon-btn p-1.5 md:p-2"
+              title="Reply"
+            >
+              <Reply className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            </button>
+
+            {/* More actions (always visible for own messages so Edit is reachable) */}
+            <MessageActionsMenu
+              isOwn={isOwn}
+              onCopy={handleCopy}
+              onDelete={handleDelete}
+              onEdit={isOwn ? openEditMode : undefined}
+              compact={!showActions && !actionsLocked}
+              onOpenChange={(open) => {
+                setActionsLocked(open)
+                if (!open) {
+                  setShowActions(false)
+                  setShowEmojiPicker(false)
+                }
+              }}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Lightbox */}
       {lightboxOpen && (
@@ -432,30 +477,81 @@ function MessageContent({ message, onImageClick }) {
 }
 
 function AudioMessageContent({ content }) {
+  const audioRef = useRef(null)
   const [loadedDuration, setLoadedDuration] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
+
   const resolvedDuration = Number(content?.duration || loadedDuration || 0)
+  const togglePlay = () => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (audio.paused) {
+      audio.play().catch(() => {})
+    } else {
+      audio.pause()
+    }
+  }
+
+  const handleSeek = (e) => {
+    const audio = audioRef.current
+    if (!audio || resolvedDuration <= 0) return
+
+    const next = Number(e.target.value)
+    audio.currentTime = next
+    setCurrentTime(next)
+  }
 
   return (
-    <div className="min-w-[220px]">
-      <div className="flex items-center gap-2 mb-2 text-text-secondary">
-        <Mic className="w-4 h-4 flex-shrink-0" />
-        <span className="text-xs">Voice message</span>
-        <span className="text-[11px] opacity-70 ml-auto">
-          {resolvedDuration > 0 ? formatDuration(resolvedDuration) : '--:--'}
-        </span>
-      </div>
+    <div className="min-w-[220px] w-full bg-accent-yellow rounded-xl px-3 py-2 text-black">
       <audio
-        controls
+        ref={audioRef}
         preload="metadata"
         src={content?.media_url}
-        className="w-full h-8"
+        className="hidden"
         onLoadedMetadata={(e) => {
           const d = Number.isFinite(e.currentTarget.duration)
             ? Math.max(0, Math.round(e.currentTarget.duration))
             : 0
           if (d > 0) setLoadedDuration(d)
         }}
+        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime || 0)}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false)
+          setCurrentTime(0)
+        }}
       />
+
+      <div className="flex items-center gap-2 mb-1.5 text-black/85">
+        <Mic className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs font-medium">Voice message</span>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={togglePlay}
+          className="w-7 h-7 rounded-full bg-black/85 text-white flex items-center justify-center hover:bg-black transition-colors"
+          title={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 ml-0.5" />}
+        </button>
+
+        <input
+          type="range"
+          min={0}
+          max={Math.max(resolvedDuration, 1)}
+          value={Math.min(currentTime, Math.max(resolvedDuration, 1))}
+          onChange={handleSeek}
+          className="flex-1 h-1.5 accent-black"
+        />
+
+        <span className="text-[11px] text-black/75 tabular-nums min-w-[88px] text-right">
+          {formatDuration(Math.round(currentTime))} / {resolvedDuration > 0 ? formatDuration(resolvedDuration) : '--:--'}
+        </span>
+      </div>
     </div>
   )
 }
@@ -479,45 +575,79 @@ function QuickReactions({ onSelect }) {
 }
 
 // ─── Message actions menu ─────────────────────────────────────────────────────
-function MessageActionsMenu({ isOwn, onCopy, onDelete, onEdit }) {
+function MessageActionsMenu({
+  isOwn,
+  onCopy,
+  onDelete,
+  onEdit,
+  onOpenChange,
+  compact = false,
+}) {
   const [open, setOpen] = useState(false)
+  const menuIdRef = useRef(`menu-${Math.random().toString(36).slice(2)}`)
+
+  useEffect(() => {
+    const onOtherMenuOpen = (event) => {
+      const openedId = event.detail?.id
+      if (openedId !== menuIdRef.current) {
+        setOpen(false)
+        onOpenChange?.(false)
+      }
+    }
+
+    window.addEventListener('tong:message-menu-open', onOtherMenuOpen)
+    return () => window.removeEventListener('tong:message-menu-open', onOtherMenuOpen)
+  }, [onOpenChange])
+
+  const setMenuOpen = (nextOpen) => {
+    if (nextOpen) {
+      window.dispatchEvent(new CustomEvent('tong:message-menu-open', {
+        detail: { id: menuIdRef.current },
+      }))
+    }
+    setOpen(nextOpen)
+    onOpenChange?.(nextOpen)
+  }
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOpen(!open)}
-        className="icon-btn"
+        onClick={() => setMenuOpen(!open)}
+        className={clsx(
+          'icon-btn p-1.5 md:p-2',
+          compact && 'bg-bg-elevated/80 border border-border hover:bg-bg-tertiary'
+        )}
         title="More"
       >
-        <MoreHorizontal className="w-4 h-4" />
+        <MoreHorizontal className="w-3.5 h-3.5 md:w-4 md:h-4" />
       </button>
 
       {open && (
-        <div className="absolute bottom-8 right-0 z-50 bg-bg-elevated border border-border rounded-xl shadow-2xl py-1 min-w-[160px] animate-scale-in">
+        <div className="absolute bottom-10 right-0 z-[70] bg-[#1f2127] border border-[#383c46] rounded-xl shadow-2xl py-1 min-w-[170px] animate-scale-in">
           <button
-            onClick={() => { onCopy(); setOpen(false) }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+            onClick={() => { onCopy(); setMenuOpen(false) }}
+            className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#f1f3f6] hover:bg-[#2b2f39] transition-colors"
           >
             Copy text
           </button>
           {isOwn && onEdit && (
             <button
-              onClick={() => { onEdit(); setOpen(false) }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover transition-colors"
+              onClick={() => { onEdit(); setMenuOpen(false) }}
+              className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#f1f3f6] hover:bg-[#2b2f39] transition-colors"
             >
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>
           )}
           <button
-            onClick={() => { onDelete(false); setOpen(false) }}
-            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-busy hover:bg-surface-hover transition-colors"
+            onClick={() => { onDelete(false); setMenuOpen(false) }}
+            className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#ff8d8d] hover:bg-[#2b2f39] transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" /> Delete for me
           </button>
           {isOwn && (
             <button
-              onClick={() => { onDelete(true); setOpen(false) }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-busy hover:bg-surface-hover transition-colors"
+              onClick={() => { onDelete(true); setMenuOpen(false) }}
+              className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#ff8d8d] hover:bg-[#2b2f39] transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" /> Delete for everyone
             </button>
