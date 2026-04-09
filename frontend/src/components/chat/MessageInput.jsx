@@ -26,6 +26,7 @@ export default function MessageInput({ conversationId, conversationType }) {
   const audioChunksRef = useRef([])
   const typingTimerRef = useRef(null)
   const recordingIntervalRef = useRef(null)
+  const recordingTimeRef = useRef(0)
 
   const { replyTo, clearReplyTo, appendMessage, replaceMessage, removeMessage, upsertConversation, upsertGroup, activeConversation, activeType } = useChatStore()
   const { user } = useAuthStore()
@@ -58,6 +59,10 @@ export default function MessageInput({ conversationId, conversationType }) {
       clearInterval(recordingIntervalRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    recordingTimeRef.current = recordingTime
+  }, [recordingTime])
 
   // Typing events
   const emitTyping = useCallback(() => {
@@ -100,16 +105,25 @@ export default function MessageInput({ conversationId, conversationType }) {
 
     try {
       const api = conversationType === 'group' ? groupApi : conversationApi
+      const firstAttachment = attachedFiles[0]
+      const detectedType = firstAttachment ? detectFileType(firstAttachment) : 'text'
+      const payloadContent = { text: sendText }
+
+      if (detectedType === 'audio') {
+        const duration = Number(firstAttachment?.duration || 0)
+        if (duration > 0) payloadContent.duration = duration
+      }
+
       const payload = {
-        content: { text: sendText },
-        message_type: attachedFiles.length > 0 ? detectFileType(attachedFiles[0]) : 'text',
+        content: payloadContent,
+        message_type: detectedType,
         reply_to: sendReplyTo?._id || sendReplyTo?.id || undefined,
       }
 
       if (attachedFiles.length > 0) {
         // Upload files via multipart — no optimistic for files
         const form = new FormData()
-        form.append('file', attachedFiles[0].file)
+        form.append('file', firstAttachment.file)
         form.append('content', JSON.stringify(payload.content))
         form.append('message_type', payload.message_type)
         if (payload.reply_to) form.append('reply_to', payload.reply_to)
@@ -212,14 +226,15 @@ export default function MessageInput({ conversationId, conversationType }) {
       'application/vnd.openxmlformats-officedocument.*': [],
     },
     maxSize: 100 * 1024 * 1024, // 100MB
-    onDrop: (accepted) => {
-      const previews = accepted.map((f) => ({
+    onDrop: async (accepted) => {
+      const previews = await Promise.all(accepted.map(async (f) => ({
         file: f,
         name: f.name,
         size: f.size,
         type: f.type,
+        duration: f.type.startsWith('audio/') ? await getAudioDuration(f) : undefined,
         preview: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
-      }))
+      })))
       setAttachedFiles(previews.slice(0, 5)) // max 5
     },
     onDropRejected: () => toast.error('File too large or unsupported format'),
@@ -235,17 +250,21 @@ export default function MessageInput({ conversationId, conversationType }) {
 
       mediaRecorder.ondataavailable = (e) => audioChunksRef.current.push(e.data)
       mediaRecorder.onstop = () => {
+        const voiceDuration = Math.max(1, recordingTimeRef.current)
         const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' })
-        setAttachedFiles([{ file, name: file.name, size: file.size, type: 'audio/webm', isVoice: true }])
+        setAttachedFiles([{ file, name: file.name, size: file.size, type: 'audio/webm', isVoice: true, duration: voiceDuration }])
         stream.getTracks().forEach((t) => t.stop())
         setRecording(false)
         clearInterval(recordingIntervalRef.current)
+        setRecordingTime(0)
+        recordingTimeRef.current = 0
       }
 
       mediaRecorder.start()
       setRecording(true)
       setRecordingTime(0)
+      recordingTimeRef.current = 0
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime((t) => t + 1)
       }, 1000)
@@ -268,6 +287,7 @@ export default function MessageInput({ conversationId, conversationType }) {
     setRecording(false)
     clearInterval(recordingIntervalRef.current)
     setRecordingTime(0)
+    recordingTimeRef.current = 0
   }
 
   const formatRecTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
@@ -311,6 +331,9 @@ export default function MessageInput({ conversationId, conversationType }) {
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-bg-elevated border border-border flex flex-col items-center justify-center gap-1 px-1">
                     <span className="text-text-muted text-xs text-center truncate w-full px-1">{f.name}</span>
+                    {f.duration ? (
+                      <span className="text-[10px] text-text-secondary">{formatRecTime(f.duration)}</span>
+                    ) : null}
                   </div>
                 )}
                 <button
@@ -425,6 +448,26 @@ export default function MessageInput({ conversationId, conversationType }) {
       </div>
     </div>
   )
+}
+
+async function getAudioDuration(file) {
+  return new Promise((resolve) => {
+    const tempUrl = URL.createObjectURL(file)
+    const audio = new Audio()
+
+    audio.preload = 'metadata'
+    audio.onloadedmetadata = () => {
+      URL.revokeObjectURL(tempUrl)
+      const duration = Number.isFinite(audio.duration) ? Math.max(0, Math.round(audio.duration)) : 0
+      resolve(duration)
+    }
+    audio.onerror = () => {
+      URL.revokeObjectURL(tempUrl)
+      resolve(0)
+    }
+
+    audio.src = tempUrl
+  })
 }
 
 function detectFileType(f) {
