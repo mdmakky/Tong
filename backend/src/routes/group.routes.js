@@ -11,6 +11,7 @@ router.use(auth);
 
 // ─── GROUPS ────────────────────────────────────
 router.get('/', groupCtrl.getGroups);
+router.get('/public/search', groupCtrl.searchPublicGroups);
 
 router.post(
   '/',
@@ -54,6 +55,7 @@ router.post(
 
 // ─── INVITE / JOIN / LEAVE ─────────────────────
 router.post('/join/:invite_link', groupCtrl.joinByInvite);
+router.post('/:id/join', groupCtrl.joinPublicGroup);
 router.post('/:id/leave', groupCtrl.leaveGroup);
 
 // ─── MESSAGES ──────────────────────────────────
