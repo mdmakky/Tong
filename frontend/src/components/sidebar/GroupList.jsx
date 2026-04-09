@@ -139,9 +139,6 @@ export default function GroupList() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={clsx('text-xs truncate', unread > 0 ? 'text-text-secondary font-medium' : 'text-text-muted')}>
-                      {groupIdLabel
-                        ? `${groupIdLabel} · `
-                        : ''}
                       {group.last_message
                         ? truncate(group.last_message?.content?.text || 'Media', 35)
                         : `${group._count?.members || group.member_count || 0} members`}
