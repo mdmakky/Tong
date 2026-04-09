@@ -155,6 +155,7 @@ function GroupInfo({ conversation, currentUser }) {
   const [leaving, setLeaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [savingGroup, setSavingGroup] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   const [busyAction, setBusyAction] = useState('')
@@ -245,7 +246,7 @@ function GroupInfo({ conversation, currentUser }) {
       const { data } = await groupApi.get(conversation.id)
       const nextGroup = data?.data
       if (nextGroup?.id) upsertGroup(nextGroup)
-    } catch (_) {}
+    } catch (_) { }
   }
 
   const handleSaveGroup = async () => {
@@ -268,6 +269,25 @@ function GroupInfo({ conversation, currentUser }) {
       toast.error(err.response?.data?.message || 'Failed to update group')
     } finally {
       setSavingGroup(false)
+    }
+  }
+
+  const handleUploadAvatar = async (file) => {
+    if (!file || !canManageGroup) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+
+    setUploadingAvatar(true)
+    try {
+      await groupApi.uploadAvatar(conversation.id, file)
+      await refreshGroupState()
+      toast.success('Group picture updated')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload group picture')
+    } finally {
+      setUploadingAvatar(false)
     }
   }
 
@@ -436,6 +456,39 @@ function GroupInfo({ conversation, currentUser }) {
         <div className="px-3 pt-3">
           <div className="bg-bg-elevated border border-border rounded-xl p-3 space-y-3">
             <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider">Group settings</h4>
+
+            {/* Avatar upload */}
+            <div className="flex flex-col items-center gap-2">
+              <label className="flex items-center justify-center w-full">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleUploadAvatar(file)
+                    // Reset input
+                    e.target.value = ''
+                  }}
+                  disabled={uploadingAvatar}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.currentTarget.parentElement?.querySelector('input')?.click()
+                  }}
+                  disabled={uploadingAvatar}
+                  className="btn-secondary w-full flex items-center justify-center gap-2"
+                >
+                  {uploadingAvatar ? (
+                    <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Image className="w-4 h-4" />
+                  )}
+                  {uploadingAvatar ? 'Uploading...' : 'Change group picture'}
+                </button>
+              </label>
+            </div>
 
             <input
               type="text"
