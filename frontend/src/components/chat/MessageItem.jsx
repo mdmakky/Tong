@@ -206,18 +206,18 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
 
         {/* Edit Mode */}
         {editMode && isOwn ? (
-          <div className="flex gap-2 items-center bg-bg-tertiary border border-border rounded-lg px-3 py-2 mb-1">
+          <div className="w-full min-w-[260px] flex gap-2 items-center bg-bg-elevated border border-accent-yellow/40 rounded-xl px-3 py-2 mb-1 shadow-lg ring-1 ring-accent-yellow/15">
             <input
               type="text"
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
-              className="flex-1 bg-transparent text-sm text-text-primary outline-none border-none"
+              className="flex-1 bg-bg-primary/80 border border-border rounded-lg px-3 py-2 text-sm text-text-primary outline-none focus:border-accent-yellow/50"
               placeholder="Edit message..."
               autoFocus
             />
             <button
               onClick={handleEdit}
-              className="px-3 py-1 bg-accent-yellow text-black text-sm rounded font-medium hover:bg-accent-yellow-dim transition-colors"
+              className="px-3 py-2 bg-accent-yellow text-black text-sm rounded-lg font-semibold hover:bg-accent-yellow-dim transition-colors"
             >
               Save
             </button>
@@ -226,7 +226,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
                 setEditMode(false)
                 setEditText(msg.content?.text || '')
               }}
-              className="px-3 py-1 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors"
+              className="px-3 py-2 bg-bg-primary border border-border text-text-primary text-sm rounded-lg hover:bg-surface-hover transition-colors"
             >
               Cancel
             </button>
@@ -403,23 +403,7 @@ function MessageContent({ message, onImageClick }) {
   }
 
   if (type === 'audio') {
-    return (
-      <div className="flex items-center gap-3 min-w-[180px]">
-        <Mic className="w-5 h-5 text-text-secondary flex-shrink-0" />
-        <div className="flex-1">
-          <div className="flex items-center gap-1 mb-1">
-            {Array.from({ length: 20 }).map((_, i) => (
-              <div
-                key={i}
-                className="w-1 rounded-full bg-current opacity-60"
-                style={{ height: `${4 + Math.sin(i) * 8 + Math.random() * 6}px` }}
-              />
-            ))}
-          </div>
-          <span className="text-[11px] opacity-60">{formatDuration(content?.duration || 0)}</span>
-        </div>
-      </div>
-    )
+    return <AudioMessageContent content={content} />
   }
 
   if (type === 'file') {
@@ -460,6 +444,35 @@ function MessageContent({ message, onImageClick }) {
     <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
       {content?.text || message.text}
     </p>
+  )
+}
+
+function AudioMessageContent({ content }) {
+  const [loadedDuration, setLoadedDuration] = useState(0)
+  const resolvedDuration = Number(content?.duration || loadedDuration || 0)
+
+  return (
+    <div className="min-w-[220px]">
+      <div className="flex items-center gap-2 mb-2 text-text-secondary">
+        <Mic className="w-4 h-4 flex-shrink-0" />
+        <span className="text-xs">Voice message</span>
+        <span className="text-[11px] opacity-70 ml-auto">
+          {resolvedDuration > 0 ? formatDuration(resolvedDuration) : '--:--'}
+        </span>
+      </div>
+      <audio
+        controls
+        preload="metadata"
+        src={content?.media_url}
+        className="w-full h-8"
+        onLoadedMetadata={(e) => {
+          const d = Number.isFinite(e.currentTarget.duration)
+            ? Math.max(0, Math.round(e.currentTarget.duration))
+            : 0
+          if (d > 0) setLoadedDuration(d)
+        }}
+      />
+    </div>
   )
 }
 
