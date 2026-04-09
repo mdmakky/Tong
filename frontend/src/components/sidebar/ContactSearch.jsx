@@ -136,66 +136,22 @@ export default function ContactSearch() {
           const username = u.username || 'unknown'
 
           return (
-          <div key={u.id} className="flex items-center gap-3 py-2.5">
-            <Avatar src={u.avatar_url} name={displayName} size="md" status={u.online_status} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-text-primary truncate">{displayName}</p>
-              <p className="text-xs text-text-muted">@{username}</p>
-            </div>
-            <button
-              onClick={() => startChat(u.id)}
-              disabled={starting === u.id}
-              className="p-2 rounded-lg text-text-muted hover:text-accent-yellow hover:bg-surface-hover transition-colors"
-              title="Start chat"
-            >
-              {starting === u.id ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <UserPlus className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-          )
-        })}
-
-        {groups.length > 0 && (
-          <p className="text-[11px] uppercase tracking-wide text-text-muted px-1 pt-3 pb-1">Public groups</p>
-        )}
-        {groups.map((group) => {
-          const memberCount = group.member_count || group._count?.members || 0
-          const isJoined = Boolean(group.is_joined || group.my_role)
-          const isJoining = joiningGroupId === group.id
-          const groupIdLabel = group.unique_group_id ? `@${group.unique_group_id}` : null
-
-          return (
-            <div key={group.id} className="flex items-center gap-3 py-2.5">
-              <Avatar src={group.avatar_url} name={group.name} size="md" />
+            <div key={u.id} className="flex items-center gap-3 py-2.5">
+              <Avatar src={u.avatar_url} name={displayName} size="md" status={u.online_status} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary truncate">{group.name}</p>
-                <p className="text-xs text-text-muted truncate">
-                  {groupIdLabel
-                    ? `${groupIdLabel} · ${group.description || `${memberCount} members`}`
-                    : (group.description || `${memberCount} members`) }
-                </p>
+                <p className="text-sm font-medium text-text-primary truncate">{displayName}</p>
+                <p className="text-xs text-text-muted">@{username}</p>
               </div>
               <button
-                onClick={() => handleGroupAction(group)}
-                disabled={isJoining}
-                className="px-2.5 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:text-text-primary hover:border-accent-yellow/40 hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
-                title={isJoined ? 'Open group chat' : 'Join group'}
+                onClick={() => startChat(u.id)}
+                disabled={starting === u.id}
+                className="p-2 rounded-lg text-text-muted hover:text-accent-yellow hover:bg-surface-hover transition-colors"
+                title="Start chat"
               >
-                {isJoining ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : isJoined ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" />
-                    Open
-                  </>
+                {starting === u.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <>
-                    <Users className="w-3.5 h-3.5" />
-                    Join
-                  </>
+                  <UserPlus className="w-4 h-4" />
                 )}
               </button>
             </div>
