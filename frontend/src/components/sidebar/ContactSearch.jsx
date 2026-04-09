@@ -10,13 +10,16 @@ export default function ContactSearch() {
   const [query, setQuery] = useState('')
   const { setActiveConversation, upsertConversation } = useChatStore()
   const [starting, setStarting] = useState(null)
+  const trimmedQuery = query.trim()
 
   const { data, isFetching } = useQuery({
     queryKey: ['user-search', query],
     queryFn: () => userApi.search(query).then((r) => r.data.data?.users ?? r.data.data ?? []),
-    enabled: query.trim().length >= 2,
+    enabled: trimmedQuery.length >= 2,
     staleTime: 5000,
   })
+
+  const users = Array.isArray(data) ? data : []
 
   const startChat = async (userId) => {
     setStarting(userId)
@@ -49,7 +52,7 @@ export default function ContactSearch() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3">
-        {query.length < 2 && (
+        {trimmedQuery.length < 2 && (
           <p className="text-text-muted text-sm text-center py-8">Type at least 2 characters to search</p>
         )}
         {isFetching && (
@@ -57,10 +60,10 @@ export default function ContactSearch() {
             <Loader2 className="w-5 h-5 text-text-muted animate-spin" />
           </div>
         )}
-        {!isFetching && data?.length === 0 && query.length >= 2 && (
+        {!isFetching && users.length === 0 && trimmedQuery.length >= 2 && (
           <p className="text-text-muted text-sm text-center py-8">No users found</p>
         )}
-        {data?.map((u) => (
+        {users.map((u) => (
           <div key={u.id} className="flex items-center gap-3 py-2.5">
             <Avatar src={u.avatar_url} name={u.display_name} size="md" status={u.online_status} />
             <div className="flex-1 min-w-0">
