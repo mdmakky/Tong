@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, Users, Lock, Globe, Shield, Camera, Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -135,13 +135,56 @@ function NewDirectChat({ query, setQuery, onSuccess }) {
 }
 
 function NewGroupChat({ onSuccess }) {
+  const UNIQUE_GROUP_ID_REGEX = /^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/
+
   const [name, setName] = useState('')
+  const [uniqueGroupId, setUniqueGroupId] = useState('')
+  const [debouncedGroupId, setDebouncedGroupId] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState('private')
   const [creating, setCreating] = useState(false)
   const avatarInputRef = useRef(null)
   const [avatar, setAvatar] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState(null)
+
+  const normalizedGroupId = uniqueGroupId.trim().toLowerCase()
+  const isGroupIdFormatValid = UNIQUE_GROUP_ID_REGEX.test(normalizedGroupId)
+
+  const normalizeGroupIdInput = (value) =>
+    String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9_-]/g, '')
+      .slice(0, 30)
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setDebouncedGroupId(normalizedGroupId)
+    }, 300)
+
+    return () => clearTimeout(handle)
+  }, [normalizedGroupId])
+
+  const {
+    data: groupIdAvailability,
+    isFetching: isCheckingGroupId,
+    isError: isGroupIdCheckError,
+    error: groupIdCheckError,
+  } = useQuery({
+    queryKey: ['check-group-id', debouncedGroupId],
+    queryFn: () => groupApi.checkUniqueId(debouncedGroupId).then((r) => r.data.data),
+    enabled: debouncedGroupId.length >= 3 && isGroupIdFormatValid,
+    staleTime: 5000,
+    retry: 1,
+  })
+
+  const isAvailabilitySettled =
+    debouncedGroupId === normalizedGroupId &&
+    normalizedGroupId.length >= 3 &&
+    isGroupIdFormatValid &&
+    !isCheckingGroupId
+
+  const isGroupIdAvailable = isAvailabilitySettled && Boolean(groupIdAvailability?.available)
 
   const handleAvatarChange = (e) => {
     const f = e.target.files[0]
@@ -153,9 +196,20 @@ function NewGroupChat({ onSuccess }) {
   const create = async (e) => {
     e.preventDefault()
     if (!name.trim()) return toast.error('Group name required')
+    if (!normalizedGroupId) return toast.error('Unique Group ID required')
+    if (!isGroupIdFormatValid) {
+      return toast.error('Unique Group ID must be 3-30 chars using lowercase letters, numbers, _ or -')
+    }
+    if (!isGroupIdAvailable) return toast.error('Unique Group ID is not available yet')
+
     setCreating(true)
     try {
-      const { data: res } = await groupApi.create({ name: name.trim(), description, type })
+      const { data: res } = await groupApi.create({
+        name: name.trim(),
+        unique_group_id: normalizedGroupId,
+        description,
+        type,
+      })
       const group = res.data
       // Upload avatar if selected
       if (avatar) {
@@ -212,6 +266,46 @@ function NewGroupChat({ onSuccess }) {
       </div>
 
       <div>
+        <label className="block text-sm font-medium text-text-secondary mb-1.5">Unique Group ID</label>
+        <input
+          type="text"
+          className="input-field"
+          placeholder="my-group-123"
+          value={uniqueGroupId}
+          onChange={(e) => setUniqueGroupId(normalizeGroupIdInput(e.target.value))}
+        />
+        <p className="text-[11px] text-text-muted mt-1">
+          Used to identify your group uniquely. Lowercase letters, numbers, _ and - only.
+        </p>
+
+        {uniqueGroupId.length > 0 && uniqueGroupId.length < 3 && (
+          <p className="text-[11px] text-red-400 mt-1">Must be at least 3 characters</p>
+        )}
+
+        {uniqueGroupId.length >= 3 && !isGroupIdFormatValid && (
+          <p className="text-[11px] text-red-400 mt-1">Invalid format</p>
+        )}
+
+        {isCheckingGroupId && (
+          <p className="text-[11px] text-text-muted mt-1">Checking availability...</p>
+        )}
+
+        {isAvailabilitySettled && isGroupIdAvailable && (
+          <p className="text-[11px] text-green-400 mt-1">Available</p>
+        )}
+
+        {isAvailabilitySettled && !isGroupIdAvailable && (
+          <p className="text-[11px] text-red-400 mt-1">This ID is already taken</p>
+        )}
+
+        {isGroupIdCheckError && !isCheckingGroupId && uniqueGroupId.length >= 3 && (
+          <p className="text-[11px] text-red-400 mt-1">
+            {groupIdCheckError?.response?.data?.message || 'Could not check availability'}
+          </p>
+        )}
+      </div>
+
+      <div>
         <label className="block text-sm font-medium text-text-secondary mb-1.5">
           Description <span className="text-text-muted">(optional)</span>
         </label>
@@ -249,7 +343,7 @@ function NewGroupChat({ onSuccess }) {
 
       <button
         type="submit"
-        disabled={creating || !name.trim()}
+        disabled={creating || !name.trim() || !isGroupIdAvailable || isCheckingGroupId}
         className="btn-primary w-full flex items-center justify-center gap-2"
       >
         {creating ? (
