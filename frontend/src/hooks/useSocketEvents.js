@@ -42,6 +42,21 @@ export default function useSocketEvents() {
         socket.emit('mark_delivered', { message_id: message._id })
       }
 
+      // If the user is currently viewing this conversation, auto-mark as read
+      // so the sender gets "seen" in real-time without the receiver needing to re-open the chat.
+      const currentUserId = useAuthStore.getState().user?.id
+      const store = useChatStore.getState()
+      if (
+        store.activeConversation?.id === convId &&
+        message.sender_id !== currentUserId
+      ) {
+        socket.emit('message_read', {
+          conversation_id: convId,
+          conversation_type: message.conversation_type || store.activeType,
+        })
+        useChatStore.getState().clearUnread?.(convId)
+      }
+
       if (message.conversation_type === 'group') {
         upsertGroup({
           id: convId,
