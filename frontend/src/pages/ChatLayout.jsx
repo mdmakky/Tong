@@ -11,7 +11,7 @@ import InfoPanel from '@/components/infopanel/InfoPanel'
 import EmptyChatState from '@/components/chat/EmptyChatState'
 
 export default function ChatLayout() {
-  const { activeConversation, showInfoPanel, setConversations, setGroups } = useChatStore()
+  const { activeConversation, showInfoPanel, toggleInfoPanel, setConversations, setGroups } = useChatStore()
 
   // Register all socket events
   useSocketEvents()
@@ -63,10 +63,26 @@ export default function ChatLayout() {
         )}
       </div>
 
-      {/* Right info panel — hidden on mobile */}
+      {/* Right info panel — hidden on mobile, sidebar on desktop */}
       {activeConversation && showInfoPanel && (
         <div className="hidden md:flex w-[320px] flex-shrink-0 flex-col border-l border-border">
           <InfoPanel />
+        </div>
+      )}
+
+      {/* Mobile info panel — full-height sheet overlay */}
+      {activeConversation && showInfoPanel && (
+        <div
+          className="md:hidden fixed inset-0 z-50 flex justify-end"
+          onClick={toggleInfoPanel}
+        >
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative w-[300px] h-full bg-bg-secondary flex flex-col overflow-y-auto shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <InfoPanel />
+          </div>
         </div>
       )}
     </div>

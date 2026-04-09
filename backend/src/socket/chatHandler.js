@@ -172,6 +172,17 @@ const chatHandler = (io, socket) => {
         avatar_url: socket.user.avatar_url,
       };
 
+      // Enrich reply_to with sender info
+      if (populated.reply_to?.sender_id) {
+        try {
+          const replySender = await prisma.user.findUnique({
+            where: { id: populated.reply_to.sender_id },
+            select: { id: true, display_name: true, username: true, avatar_url: true },
+          });
+          if (replySender) populated.reply_to.sender = replySender;
+        } catch (_) {}
+      }
+
       // Broadcast to everyone in the conv room EXCEPT the sender
       socket.to(`conv:${conversation_id}`).emit('new_message', populated);
 

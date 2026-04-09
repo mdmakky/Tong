@@ -141,7 +141,7 @@ export default function ConversationList() {
                     <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                       {isPinned && <Pin className="w-3 h-3 text-accent-yellow" />}
                       <span className="text-xs text-text-muted">
-                        {formatConvTime(conv.last_message_at || conv.created_at)}
+                        {formatConvTime(conv.last_message_at || conv.last_message?.created_at || conv.created_at)}
                       </span>
                     </div>
                   </div>

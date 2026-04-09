@@ -119,7 +119,7 @@ export default function GroupList() {
                       <TypeIcon className="w-3 h-3 text-text-muted flex-shrink-0" />
                     </div>
                     <span className="text-xs text-text-muted flex-shrink-0 ml-2">
-                      {formatConvTime(group.last_message_at || group.created_at)}
+                      {formatConvTime(group.last_message_at || group.last_message?.created_at || group.created_at)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">

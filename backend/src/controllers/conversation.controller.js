@@ -464,12 +464,30 @@ export const getMessages = async (req, res, next) => {
       .populate('reply_to', 'content sender_id message_type created_at')
       .lean();
 
+    // Enrich messages with sender info from Postgres
+    const senderIdSet = new Set();
+    messages.forEach((m) => {
+      if (m.sender_id) senderIdSet.add(m.sender_id);
+      if (m.reply_to?.sender_id) senderIdSet.add(m.reply_to.sender_id);
+    });
+    const senderUsers = await prisma.user.findMany({
+      where: { id: { in: [...senderIdSet].filter(Boolean) } },
+      select: { id: true, display_name: true, username: true, avatar_url: true },
+    });
+    const userMap = Object.fromEntries(senderUsers.map((u) => [u.id, u]));
+
     // Replace deleted-for-all content with tombstone — keep message in list
     const sanitized = messages.map((m) => {
-      if (m.deleted_for_all) {
-        return { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true };
-      }
-      return { ...m, is_deleted_for_all: false };
+      const base = m.deleted_for_all
+        ? { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true }
+        : { ...m, is_deleted_for_all: false };
+      return {
+        ...base,
+        sender: userMap[m.sender_id] || null,
+        reply_to: m.reply_to
+          ? { ...m.reply_to, sender: userMap[m.reply_to.sender_id] || null }
+          : null,
+      };
     });
 
     const total = await Message.countDocuments({

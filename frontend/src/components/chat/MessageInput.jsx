@@ -39,6 +39,18 @@ export default function MessageInput({ conversationId, conversationType }) {
     ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'
   }, [text])
 
+  // Focus input when conversation changes
+  useEffect(() => {
+    if (!conversationId) return
+    textareaRef.current?.focus()
+  }, [conversationId])
+
+  // Focus input when reply is triggered
+  useEffect(() => {
+    if (!replyTo) return
+    textareaRef.current?.focus()
+  }, [replyTo])
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {

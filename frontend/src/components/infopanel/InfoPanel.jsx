@@ -103,7 +103,7 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
       </div>
 
       {/* Avatar */}
-      <Avatar src={other?.avatar_url} name={other?.display_name} size="2xl" status={status} />
+      <Avatar src={other?.avatar_url} name={other?.display_name} size="xl" status={status} />
       <h3 className="mt-3 text-lg font-semibold text-text-primary">{other?.display_name}</h3>
       <p className="text-sm text-text-secondary">@{other?.username}</p>
 

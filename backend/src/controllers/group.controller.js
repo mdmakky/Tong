@@ -825,12 +825,30 @@ export const getGroupMessages = async (req, res, next) => {
       deleted_for: { $ne: req.user.id },
     });
 
+    // Enrich messages with sender info from Postgres
+    const senderIdSet = new Set();
+    messages.forEach((m) => {
+      if (m.sender_id) senderIdSet.add(m.sender_id);
+      if (m.reply_to?.sender_id) senderIdSet.add(m.reply_to.sender_id);
+    });
+    const senderUsers = await prisma.user.findMany({
+      where: { id: { in: [...senderIdSet].filter(Boolean) } },
+      select: { id: true, display_name: true, username: true, avatar_url: true },
+    });
+    const userMap = Object.fromEntries(senderUsers.map((u) => [u.id, u]));
+
     // Replace deleted-for-all content with tombstone
     const sanitized = messages.map((m) => {
-      if (m.deleted_for_all) {
-        return { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true };
-      }
-      return { ...m, is_deleted_for_all: false };
+      const base = m.deleted_for_all
+        ? { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true }
+        : { ...m, is_deleted_for_all: false };
+      return {
+        ...base,
+        sender: userMap[m.sender_id] || null,
+        reply_to: m.reply_to
+          ? { ...m.reply_to, sender: userMap[m.reply_to.sender_id] || null }
+          : null,
+      };
     });
 
     // Update last_read_at
@@ -896,6 +914,15 @@ export const sendGroupMessage = async (req, res, next) => {
       display_name: req.user.display_name,
       avatar_url: req.user.avatar_url,
     };
+
+    // Enrich reply_to with sender info
+    if (populated.reply_to?.sender_id) {
+      const replySender = await prisma.user.findUnique({
+        where: { id: populated.reply_to.sender_id },
+        select: { id: true, display_name: true, username: true, avatar_url: true },
+      });
+      if (replySender) populated.reply_to.sender = replySender;
+    }
 
     emitToGroupRoom(req, id, 'new_message', populated);
 

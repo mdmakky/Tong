@@ -100,12 +100,12 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
       onMouseLeave={() => { setShowActions(false); setShowEmojiPicker(false) }}
     >
       {/* Avatar (only for received messages, first in a group) */}
-      <div className="w-8 flex-shrink-0">
+      <div className="w-7 flex-shrink-0">
         {showAvatar && !isOwn && (
           <Avatar
             src={sender?.avatar_url}
             name={sender?.display_name}
-            size="sm"
+            size="xs"
           />
         )}
       </div>

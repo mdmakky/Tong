@@ -6,10 +6,14 @@ export default function ReplyPreview({ messageId, isOwn, conversationId }) {
 
   // messageId may be a populated object (from API) or a plain ID string
   let original = null
+  const convMessages = messages[conversationId] || []
+
   if (messageId && typeof messageId === 'object') {
-    original = messageId
+    // Try to find the full version in the store first (has sender enrichment)
+    const id = messageId._id || messageId.id
+    const fromStore = id ? convMessages.find((m) => m._id === id || m.id === id) : null
+    original = fromStore || messageId
   } else if (messageId) {
-    const convMessages = messages[conversationId] || []
     original = convMessages.find((m) => m._id === messageId || m.id === messageId)
   }
 

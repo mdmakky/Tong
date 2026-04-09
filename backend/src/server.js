@@ -37,7 +37,7 @@ const startServer = async () => {
       console.log(`
 ╔══════════════════════════════════════════════╗
 ║                                              ║
-║   🚀 tong Backend Server                    ║
+║   🚀 tong Backend Server                      ║
 ║                                              ║
 ║   Port:        ${String(env.PORT).padEnd(29)}║
 ║   Environment: ${String(env.NODE_ENV).padEnd(29)}║
