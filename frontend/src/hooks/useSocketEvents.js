@@ -134,8 +134,18 @@ export default function useSocketEvents() {
     }
 
     // ─── Message edited ───
-    const onEdited = ({ message_id, conversation_id, new_content, edited_at }) => {
-      updateMessage(conversation_id, message_id, { content: new_content, edited_at })
+    const onEdited = ({ message_id, conversation_id, new_content, is_edited, edited_at }) => {
+      updateMessage(conversation_id, message_id, {
+        content: new_content,
+        is_edited: true,
+        edited_at
+      })
+    }
+
+    // ─── Edit error (message too old) ───
+    const onEditError = ({ message_id, error }) => {
+      // Import toast at the top
+      // This will be handled in the MessageItem component
     }
 
     // ─── Message deleted ───
@@ -187,7 +197,7 @@ export default function useSocketEvents() {
               conversation_id: group.id,
               conversation_type: 'group',
             })
-          } catch (_) {}
+          } catch (_) { }
           return
         }
       }
@@ -224,7 +234,7 @@ export default function useSocketEvents() {
           const group = r.data?.data
           if (group?.id) upsertGroup(group)
         })
-        .catch(() => {})
+        .catch(() => { })
     }
 
     const onMemberLeft = ({ group_id }) => {
@@ -235,7 +245,7 @@ export default function useSocketEvents() {
           const group = r.data?.data
           if (group?.id) upsertGroup(group)
         })
-        .catch(() => {})
+        .catch(() => { })
     }
 
     const onMemberRoleUpdated = ({ group_id }) => {
@@ -246,7 +256,7 @@ export default function useSocketEvents() {
           const group = r.data?.data
           if (group?.id) upsertGroup(group)
         })
-        .catch(() => {})
+        .catch(() => { })
     }
 
     const onRemovedFromGroup = ({ group_id }) => {
@@ -264,6 +274,7 @@ export default function useSocketEvents() {
     socket.on('message_read', onRead)
     socket.on('messages_read', onBulkRead)
     socket.on('message_edited', onEdited)
+    socket.on('edit_error', onEditError)
     socket.on('message_deleted', onDeleted)
     socket.on('reaction_update', onReaction)
     socket.on('user_typing', onTypingStart)
@@ -285,6 +296,7 @@ export default function useSocketEvents() {
       socket.off('message_read', onRead)
       socket.off('messages_read', onBulkRead)
       socket.off('message_edited', onEdited)
+      socket.off('edit_error', onEditError)
       socket.off('message_deleted', onDeleted)
       socket.off('reaction_update', onReaction)
       socket.off('user_typing', onTypingStart)

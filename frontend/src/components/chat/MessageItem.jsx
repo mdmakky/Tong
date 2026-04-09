@@ -32,6 +32,14 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
   const isDeleted = msg.is_deleted_for_all
   const isMediaMessage = ['image', 'video', 'audio'].includes(msg.message_type)
 
+  // Check if message is older than 24 hours
+  const isOlderThan24Hours = () => {
+    const messageTime = new Date(msg.created_at).getTime()
+    const currentTime = Date.now()
+    const hoursDiff = (currentTime - messageTime) / (1000 * 60 * 60)
+    return hoursDiff > 24
+  }
+
   // Check if this is a system event message (e.g. "X added Y")
   const isSystem = msg.message_type === 'system'
 
@@ -129,6 +137,13 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
     }
 
     if (editText === msg.content?.text) {
+      setEditMode(false)
+      return
+    }
+
+    // Check if message is older than 24 hours
+    if (isOlderThan24Hours()) {
+      toast.error('Messages cannot be edited after 24 hours')
       setEditMode(false)
       return
     }
@@ -630,10 +645,19 @@ function MessageActionsMenu({
           >
             Copy text
           </button>
-          {isOwn && onEdit && (
+          {isOwn && onEdit && canEdit && (
             <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
               className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#f1f3f6] hover:bg-[#2b2f39] transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Edit
+            </button>
+          )}
+          {isOwn && onEdit && !canEdit && (
+            <button
+              disabled
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-muted opacity-50 cursor-not-allowed"
+              title="Messages cannot be edited after 24 hours"
             >
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>

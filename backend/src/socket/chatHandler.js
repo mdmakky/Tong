@@ -180,7 +180,7 @@ const chatHandler = (io, socket) => {
             select: { id: true, display_name: true, username: true, avatar_url: true },
           });
           if (replySender) populated.reply_to.sender = replySender;
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // ── Determine initial delivery status ──────────────────────────────
@@ -198,7 +198,7 @@ const chatHandler = (io, socket) => {
           // Persist delivered_to in DB (fire-and-forget)
           Message.findByIdAndUpdate(message._id, {
             $addToSet: { delivered_to: receiverId },
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
       populated.status = initialStatus;
@@ -225,7 +225,7 @@ const chatHandler = (io, socket) => {
             access.conversation.participant_1,
             access.conversation.participant_2,
           ]),
-        ]).catch(() => {});
+        ]).catch(() => { });
       }
 
       callback?.({ success: true, message: populated });
@@ -470,6 +470,19 @@ const chatHandler = (io, socket) => {
       const message = await Message.findById(message_id);
       if (!message || message.sender_id !== userId || !text?.trim()) return;
 
+      // Check if message is older than 24 hours
+      const messageCreatedTime = new Date(message.created_at).getTime();
+      const currentTime = Date.now();
+      const hoursDiff = (currentTime - messageCreatedTime) / (1000 * 60 * 60);
+
+      if (hoursDiff > 24) {
+        socket.emit('edit_error', {
+          message_id,
+          error: 'Messages cannot be edited after 24 hours',
+        });
+        return;
+      }
+
       const access = await resolveConversationAccess(
         message.conversation_id,
         message.conversation_type
@@ -479,6 +492,7 @@ const chatHandler = (io, socket) => {
       message.edit_history.push({ content: message.content?.text || '', edited_at: new Date() });
       message.content.text = text.trim();
       message.is_edited = true;
+      message.edited_at = new Date();
       await message.save();
 
       io.to(`conv:${message.conversation_id}`).emit('message_edited', {
@@ -486,6 +500,7 @@ const chatHandler = (io, socket) => {
         conversation_id: message.conversation_id,
         new_content: { text: text.trim() },
         is_edited: true,
+        edited_at: message.edited_at,
       });
     } catch (err) {
       console.error('edit_message error:', err.message);

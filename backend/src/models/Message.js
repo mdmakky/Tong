@@ -91,6 +91,7 @@ const messageSchema = new Schema(
     delivered_to: [{ type: String }],
     is_pinned: { type: Boolean, default: false },
     is_edited: { type: Boolean, default: false },
+    edited_at: { type: Date, default: null },
     edit_history: [editHistorySchema],
     is_deleted: { type: Boolean, default: false },
     deleted_for: [{ type: String }], // user IDs who deleted for themselves
