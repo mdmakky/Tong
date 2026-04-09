@@ -150,7 +150,7 @@ export default function MessageInput({ conversationId, conversationType }) {
               // Replace optimistic msg with the real one (status comes from server: 'sent' or 'delivered')
               const realMsg = { ...response.message, status: response.message.status || 'sent' }
               replaceMessage(conversationId, tempId, realMsg)
-              
+
               // Update sidebar conversation/group with new last message
               if (conversationType === 'group') {
                 upsertGroup({
@@ -175,7 +175,7 @@ export default function MessageInput({ conversationId, conversationType }) {
           const { data } = await api.sendMessage(conversationId, payload)
           const message = data.data
           appendMessage(conversationId, message)
-          
+
           // Update sidebar conversation/group with new last message
           if (conversationType === 'group') {
             upsertGroup({

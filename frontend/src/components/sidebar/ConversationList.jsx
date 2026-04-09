@@ -34,7 +34,7 @@ export default function ConversationList() {
       const bPinned = pinnedConversations.includes(b.id)
       if (aPinned && !bPinned) return -1
       if (!aPinned && bPinned) return 1
-      
+
       // Sort by last message time (most recent first)
       const aTime = new Date(a.last_message_at || a.last_message?.created_at || a.created_at).getTime()
       const bTime = new Date(b.last_message_at || b.last_message?.created_at || b.created_at).getTime()
@@ -163,12 +163,12 @@ export default function ConversationList() {
                         conv.last_message?.sender_id === user?.id &&
                         conv.last_message?.status === 'read' &&
                         conv.last_message?.read_by && (
-                        <img
-                          src={conv.last_message.read_by.reader_avatar_url || other?.avatar_url}
-                          alt="Seen"
-                          className="w-4 h-4 rounded-full object-cover ring-1 ring-bg-primary"
-                        />
-                      )}
+                          <img
+                            src={conv.last_message.read_by.reader_avatar_url || other?.avatar_url}
+                            alt="Seen"
+                            className="w-4 h-4 rounded-full object-cover ring-1 ring-bg-primary"
+                          />
+                        )}
                     </div>
                   </div>
                 </div>
