@@ -37,6 +37,11 @@ export default function useSocketEvents() {
       appendMessage(convId, message)
       incrementUnread(convId)
 
+      // Auto-acknowledge delivery so the sender sees double-tick in real-time
+      if (message._id && message.conversation_type !== 'group') {
+        socket.emit('mark_delivered', { message_id: message._id })
+      }
+
       if (message.conversation_type === 'group') {
         upsertGroup({
           id: convId,
@@ -57,9 +62,34 @@ export default function useSocketEvents() {
       updateMessage(conversation_id, message_id, { status: 'delivered' })
     }
 
-    // ─── Message read ───
-    const onRead = ({ message_id, conversation_id }) => {
-      updateMessage(conversation_id, message_id, { status: 'read' })
+    // ─── Single message read ───
+    const onRead = ({ message_id, conversation_id, reader_id, reader_avatar_url, reader_display_name, read_at }) => {
+      updateMessage(conversation_id, message_id, {
+        status: 'read',
+        read_by: { reader_id, reader_avatar_url, reader_display_name, read_at },
+      })
+    }
+
+    // ─── Bulk messages read (when receiver opens the conversation) ───
+    const onBulkRead = ({ message_ids, conversation_id, reader_id, reader_avatar_url, reader_display_name, read_at }) => {
+      const readInfo = { reader_id, reader_avatar_url, reader_display_name, read_at }
+      // For 1-to-1 chats: if the receiver opened the conversation, they saw everything.
+      // Mark ALL own messages in that conversation as 'read'.
+      const store = useChatStore.getState()
+      const convMessages = store.messages[conversation_id] || []
+      if (convMessages.length === 0) return
+
+      const currentUserId = useAuthStore.getState().user?.id
+      const updated = convMessages.map((m) => {
+        // Only update own messages (the ones the sender sent)
+        if (m.sender_id === currentUserId && m.status !== 'read') {
+          return { ...m, status: 'read', read_by: readInfo }
+        }
+        return m
+      })
+      useChatStore.setState((state) => ({
+        messages: { ...state.messages, [conversation_id]: updated },
+      }))
     }
 
     // ─── Message edited ───
@@ -188,6 +218,7 @@ export default function useSocketEvents() {
     socket.on('new_message', onNewMessage)
     socket.on('message_delivered', onDelivered)
     socket.on('message_read', onRead)
+    socket.on('messages_read', onBulkRead)
     socket.on('message_edited', onEdited)
     socket.on('message_deleted', onDeleted)
     socket.on('reaction_update', onReaction)
@@ -208,6 +239,7 @@ export default function useSocketEvents() {
       socket.off('new_message', onNewMessage)
       socket.off('message_delivered', onDelivered)
       socket.off('message_read', onRead)
+      socket.off('messages_read', onBulkRead)
       socket.off('message_edited', onEdited)
       socket.off('message_deleted', onDeleted)
       socket.off('reaction_update', onReaction)

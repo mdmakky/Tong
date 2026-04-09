@@ -428,25 +428,9 @@ export const getMessages = async (req, res, next) => {
 
     if (!conversation) throw ApiError.notFound('Conversation not found');
 
-    // Persist read state when opening a direct conversation from REST.
-    if (!before && effectiveSkip === 0) {
-      const readAt = new Date();
-      await Message.updateMany(
-        {
-          conversation_id: id,
-          sender_id: { $ne: userId },
-          is_deleted: false,
-          deleted_for_all: false,
-          deleted_for: { $ne: userId },
-          'read_receipts.user_id': { $ne: userId },
-        },
-        {
-          $addToSet: {
-            read_receipts: { user_id: userId, read_at: readAt },
-          },
-        }
-      );
-    }
+    // NOTE: Read receipts are handled by the socket 'message_read' event
+    // (emitted from ChatWindow Effect 2) so that the sender gets real-time
+    // 'seen' notifications. Do NOT mark as read here to avoid race conditions.
 
     const query = {
       conversation_id: id,
@@ -464,12 +448,47 @@ export const getMessages = async (req, res, next) => {
       .populate('reply_to', 'content sender_id message_type created_at')
       .lean();
 
-    // Replace deleted-for-all content with tombstone — keep message in list
+    // Determine the other participant so we can compute status correctly
+    const otherUserId = conversation.participant_1 === userId
+      ? conversation.participant_2
+      : conversation.participant_1;
+
+    // Fetch the other user's avatar for 'read_by' info
+    let otherUser = null;
+    try {
+      otherUser = await prisma.user.findUnique({
+        where: { id: otherUserId },
+        select: { display_name: true, avatar_url: true },
+      });
+    } catch (_) {}
+
+    // Replace deleted-for-all content with tombstone + compute status from DB fields
     const sanitized = messages.map((m) => {
-      if (m.deleted_for_all) {
-        return { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true };
+      const base = m.deleted_for_all
+        ? { ...m, content: { text: 'This message was deleted' }, is_deleted_for_all: true }
+        : { ...m, is_deleted_for_all: false };
+
+      // Compute status only for own messages (sent by the current user)
+      if (m.sender_id === userId) {
+        const readByOther = (m.read_receipts || []).find((r) => r.user_id === otherUserId);
+        const deliveredToOther = (m.delivered_to || []).includes(otherUserId);
+
+        if (readByOther) {
+          base.status = 'read';
+          base.read_by = {
+            reader_id: otherUserId,
+            reader_avatar_url: otherUser?.avatar_url || null,
+            reader_display_name: otherUser?.display_name || null,
+            read_at: readByOther.read_at,
+          };
+        } else if (deliveredToOther) {
+          base.status = 'delivered';
+        } else {
+          base.status = 'sent';
+        }
       }
-      return { ...m, is_deleted_for_all: false };
+
+      return base;
     });
 
     const total = await Message.countDocuments({
