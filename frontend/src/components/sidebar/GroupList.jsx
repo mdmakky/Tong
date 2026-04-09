@@ -26,13 +26,20 @@ export default function GroupList() {
   } = useChatStore()
 
   const searchNeedle = search.trim().toLowerCase()
-  const filtered = groups.filter((g) => {
-    if (!searchNeedle) return true
-    return (
-      g.name?.toLowerCase().includes(searchNeedle) ||
-      g.unique_group_id?.toLowerCase().includes(searchNeedle)
-    )
-  })
+  const filtered = groups
+    .filter((g) => {
+      if (!searchNeedle) return true
+      return (
+        g.name?.toLowerCase().includes(searchNeedle) ||
+        g.unique_group_id?.toLowerCase().includes(searchNeedle)
+      )
+    })
+    .sort((a, b) => {
+      // Sort by last message time (most recent first)
+      const aTime = new Date(a.last_message_at || a.last_message?.created_at || a.created_at).getTime()
+      const bTime = new Date(b.last_message_at || b.last_message?.created_at || b.created_at).getTime()
+      return bTime - aTime
+    })
 
   const handleDeleteGroupChat = async (group) => {
     if (!group?.id || busyGroupId) return
