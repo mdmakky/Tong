@@ -1,8 +1,11 @@
 User-agent: *
 Allow: /
+Allow: /register
+Allow: /login
 Disallow: /app
-Disallow: /login
-Disallow: /register
 Disallow: /forgot-password
+
+User-agent: Googlebot
+Crawl-delay: 1
 
 Sitemap: https://tongchat.app/sitemap.xml
