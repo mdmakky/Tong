@@ -184,7 +184,14 @@ function NewGroupChat({ onSuccess }) {
     isGroupIdFormatValid &&
     !isCheckingGroupId
 
-  const isGroupIdAvailable = isAvailabilitySettled && Boolean(groupIdAvailability?.available)
+  const isGroupIdAvailable =
+    isAvailabilitySettled &&
+    !isGroupIdCheckError &&
+    Boolean(groupIdAvailability?.available)
+  const isGroupIdTaken =
+    isAvailabilitySettled &&
+    !isGroupIdCheckError &&
+    groupIdAvailability?.available === false
 
   const handleAvatarChange = (e) => {
     const f = e.target.files[0]
@@ -294,7 +301,7 @@ function NewGroupChat({ onSuccess }) {
           <p className="text-[11px] text-green-400 mt-1">Available</p>
         )}
 
-        {isAvailabilitySettled && !isGroupIdAvailable && (
+        {isGroupIdTaken && (
           <p className="text-[11px] text-red-400 mt-1">This ID is already taken</p>
         )}
 

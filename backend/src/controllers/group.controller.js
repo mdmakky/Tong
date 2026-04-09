@@ -142,6 +142,7 @@ export const searchPublicGroups = async (req, res, next) => {
           OR: [
             { name: { contains: term, mode: 'insensitive' } },
             { description: { contains: term, mode: 'insensitive' } },
+            { unique_group_id: { contains: term, mode: 'insensitive' } },
           ],
         },
         include: {
@@ -160,6 +161,7 @@ export const searchPublicGroups = async (req, res, next) => {
           OR: [
             { name: { contains: term, mode: 'insensitive' } },
             { description: { contains: term, mode: 'insensitive' } },
+            { unique_group_id: { contains: term, mode: 'insensitive' } },
           ],
         },
       }),

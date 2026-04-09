@@ -25,9 +25,14 @@ export default function GroupList() {
     unreadCounts,
   } = useChatStore()
 
-  const filtered = groups.filter((g) =>
-    !search || g.name?.toLowerCase().includes(search.toLowerCase())
-  )
+  const searchNeedle = search.trim().toLowerCase()
+  const filtered = groups.filter((g) => {
+    if (!searchNeedle) return true
+    return (
+      g.name?.toLowerCase().includes(searchNeedle) ||
+      g.unique_group_id?.toLowerCase().includes(searchNeedle)
+    )
+  })
 
   const handleDeleteGroupChat = async (group) => {
     if (!group?.id || busyGroupId) return
@@ -67,7 +72,7 @@ export default function GroupList() {
           <input
             type="text"
             className="w-full bg-bg-tertiary border border-border text-text-primary rounded-lg pl-8 pr-8 py-2 text-sm placeholder:text-text-muted focus:outline-none focus:border-accent-yellow/50 transition-colors"
-            placeholder="Search groups..."
+            placeholder="Search groups or group ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -88,6 +93,7 @@ export default function GroupList() {
           const unread = unreadCounts[group.id] || 0
           const isActive = activeConversation?.id === group.id
           const isBusy = busyGroupId === group.id
+          const groupIdLabel = group.unique_group_id ? `@${group.unique_group_id}` : null
 
           return (
             <div
@@ -118,6 +124,9 @@ export default function GroupList() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className={clsx('text-xs truncate', unread > 0 ? 'text-text-secondary font-medium' : 'text-text-muted')}>
+                      {groupIdLabel
+                        ? `${groupIdLabel} · `
+                        : ''}
                       {group.last_message
                         ? truncate(group.last_message?.content?.text || 'Media', 35)
                         : `${group._count?.members || group.member_count || 0} members`}

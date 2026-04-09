@@ -165,6 +165,7 @@ export default function ContactSearch() {
           const memberCount = group.member_count || group._count?.members || 0
           const isJoined = Boolean(group.is_joined || group.my_role)
           const isJoining = joiningGroupId === group.id
+          const groupIdLabel = group.unique_group_id ? `@${group.unique_group_id}` : null
 
           return (
             <div key={group.id} className="flex items-center gap-3 py-2.5">
@@ -172,7 +173,9 @@ export default function ContactSearch() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">{group.name}</p>
                 <p className="text-xs text-text-muted truncate">
-                  {group.description || `${memberCount} members`}
+                  {groupIdLabel
+                    ? `${groupIdLabel} · ${group.description || `${memberCount} members`}`
+                    : (group.description || `${memberCount} members`) }
                 </p>
               </div>
               <button
