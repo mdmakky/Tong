@@ -59,6 +59,15 @@ const removeUserFromGroupRoom = (req, userId, groupId) => {
   if (io) io.in(`user:${userId}`).socketsLeave(`conv:${groupId}`);
 };
 
+const UNIQUE_GROUP_ID_REGEX = /^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/;
+
+const normalizeUniqueGroupId = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
+
+const isValidUniqueGroupId = (value) => UNIQUE_GROUP_ID_REGEX.test(value);
+
 // ─── GET MY GROUPS ─────────────────────────────
 export const getGroups = async (req, res, next) => {
   try {
@@ -187,17 +196,59 @@ export const searchPublicGroups = async (req, res, next) => {
   }
 };
 
+// ─── CHECK UNIQUE GROUP ID AVAILABILITY ───────
+export const checkUniqueGroupIdAvailability = async (req, res, next) => {
+  try {
+    const normalized = normalizeUniqueGroupId(req.params.unique_group_id);
+
+    if (!isValidUniqueGroupId(normalized)) {
+      throw ApiError.badRequest(
+        'unique_group_id must be 3-30 chars using lowercase letters, numbers, _ or -'
+      );
+    }
+
+    const existing = await prisma.group.findUnique({
+      where: { unique_group_id: normalized },
+      select: { id: true },
+    });
+
+    return ApiResponse.ok('Unique group ID availability', {
+      unique_group_id: normalized,
+      available: !existing,
+    }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── CREATE GROUP ──────────────────────────────
 export const createGroup = async (req, res, next) => {
   try {
-    const { name, description, type, max_members, is_invite_only, member_ids } = req.body;
+    const { name, unique_group_id, description, type, max_members, is_invite_only, member_ids } = req.body;
     const initialMemberIds = Array.isArray(member_ids)
       ? member_ids.filter((id) => id !== req.user.id).slice(0, 255)
       : [];
 
+    const normalizedUniqueGroupId = normalizeUniqueGroupId(unique_group_id);
+    if (!isValidUniqueGroupId(normalizedUniqueGroupId)) {
+      throw ApiError.badRequest(
+        'unique_group_id must be 3-30 chars using lowercase letters, numbers, _ or -'
+      );
+    }
+
+    const existingGroup = await prisma.group.findUnique({
+      where: { unique_group_id: normalizedUniqueGroupId },
+      select: { id: true },
+    });
+
+    if (existingGroup) {
+      throw ApiError.conflict('This unique group ID is already taken');
+    }
+
     const group = await prisma.group.create({
       data: {
         name,
+        unique_group_id: normalizedUniqueGroupId,
         description: description || null,
         type: type || 'private',
         owner_id: req.user.id,

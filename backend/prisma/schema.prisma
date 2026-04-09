@@ -96,6 +96,7 @@ model User {
 model Group {
   id                    String    @id @default(uuid()) @db.Uuid
   name                  String    @db.VarChar(100)
+  unique_group_id       String?   @unique @db.VarChar(30)
   description           String?   @db.Text
   avatar_url            String?   @db.Text
   type                  GroupType
