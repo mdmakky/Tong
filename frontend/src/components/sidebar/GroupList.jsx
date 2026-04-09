@@ -23,6 +23,7 @@ export default function GroupList() {
     setActiveConversation,
     removeGroup,
     unreadCounts,
+    pinnedGroups,
   } = useChatStore()
 
   const searchNeedle = search.trim().toLowerCase()
@@ -35,7 +36,13 @@ export default function GroupList() {
       )
     })
     .sort((a, b) => {
-      // Sort by last message time (most recent first)
+      // Pinned groups first
+      const aPinned = pinnedGroups.includes(a.id)
+      const bPinned = pinnedGroups.includes(b.id)
+      if (aPinned && !bPinned) return -1
+      if (!aPinned && bPinned) return 1
+      
+      // Then sort by last message time (most recent first)
       const aTime = new Date(a.last_message_at || a.last_message?.created_at || a.created_at).getTime()
       const bTime = new Date(b.last_message_at || b.last_message?.created_at || b.created_at).getTime()
       return bTime - aTime
@@ -100,6 +107,7 @@ export default function GroupList() {
           const unread = unreadCounts[group.id] || 0
           const isActive = activeConversation?.id === group.id
           const isBusy = busyGroupId === group.id
+          const isPinned = pinnedGroups.includes(group.id)
           const groupIdLabel = group.unique_group_id ? `@${group.unique_group_id}` : null
 
           return (

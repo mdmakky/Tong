@@ -81,6 +81,7 @@ const useChatStore = create((set, get) => ({
   sidebarTab: readPersistedSidebarTab(), // 'chats' | 'groups' | 'contacts'
   showInfoPanel: true,
   pinnedConversations: JSON.parse(localStorage.getItem('pinnedConversations') || '[]'),
+  pinnedGroups: JSON.parse(localStorage.getItem('pinnedGroups') || '[]'),
 
   // ─── Actions ──────────────────────────────────────────────
 
@@ -351,6 +352,16 @@ const useChatStore = create((set, get) => ({
         : [...state.pinnedConversations, convId]
       localStorage.setItem('pinnedConversations', JSON.stringify(pinned))
       return { pinnedConversations: pinned }
+    })
+  },
+
+  togglePinGroup: (groupId) => {
+    set((state) => {
+      const pinned = state.pinnedGroups.includes(groupId)
+        ? state.pinnedGroups.filter((id) => id !== groupId)
+        : [...state.pinnedGroups, groupId]
+      localStorage.setItem('pinnedGroups', JSON.stringify(pinned))
+      return { pinnedGroups: pinned }
     })
   },
 
