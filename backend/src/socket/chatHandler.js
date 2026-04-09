@@ -237,6 +237,7 @@ const chatHandler = (io, socket) => {
 
       const access = await resolveConversationAccess(targetConversationId, targetConversationType);
       if (!access) return;
+      const readAt = new Date();
 
       // Mark one message as read
       if (message_id) {
@@ -244,7 +245,7 @@ const chatHandler = (io, socket) => {
           { _id: message_id, conversation_id: targetConversationId },
           {
             $addToSet: {
-              read_receipts: { user_id: userId, read_at: new Date() },
+              read_receipts: { user_id: userId, read_at: readAt },
             },
           }
         );
@@ -253,7 +254,7 @@ const chatHandler = (io, socket) => {
           message_id,
           conversation_id: targetConversationId,
           user_id: userId,
-          read_at: new Date(),
+          read_at: readAt,
         });
       }
 
@@ -263,8 +264,25 @@ const chatHandler = (io, socket) => {
           where: {
             group_id_user_id: { group_id: targetConversationId, user_id: userId },
           },
-          data: { last_read_at: new Date() },
+          data: { last_read_at: readAt },
         });
+      } else if (!message_id) {
+        // Direct chats send message_read with conversation_id only; persist read state for all unread messages.
+        await Message.updateMany(
+          {
+            conversation_id: targetConversationId,
+            sender_id: { $ne: userId },
+            is_deleted: false,
+            deleted_for_all: false,
+            deleted_for: { $ne: userId },
+            'read_receipts.user_id': { $ne: userId },
+          },
+          {
+            $addToSet: {
+              read_receipts: { user_id: userId, read_at: readAt },
+            },
+          }
+        );
       }
     } catch (err) {
       console.error('message_read error:', err.message);

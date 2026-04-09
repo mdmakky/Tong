@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { X, Camera, Save, LogOut, Moon, Sun, Monitor } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
+import useChatStore from '@/store/chatStore'
 import { userApi } from '@/lib/apiServices'
 import Avatar from '@/components/ui/Avatar'
 
@@ -20,12 +21,16 @@ const STATUS_OPTIONS = [
 
 export default function UserSettingsModal({ onClose, initialTab = 'profile' }) {
   const { user, logout, updateUser } = useAuthStore()
+  const socket = useChatStore((s) => s.socket)
   const fileInputRef = useRef(null)
+
+  const normalizeOnlineStatus = (status) =>
+    STATUS_OPTIONS.some((s) => s.value === status) ? status : 'online'
 
   const [form, setForm] = useState({
     display_name: user?.display_name || '',
     bio: user?.bio || '',
-    online_status: user?.online_status || 'online',
+    online_status: normalizeOnlineStatus(user?.online_status),
     custom_status: user?.custom_status || '',
     theme_preference: user?.theme_preference || 'system',
   })
@@ -38,6 +43,12 @@ export default function UserSettingsModal({ onClose, initialTab = 'profile' }) {
     try {
       const { data } = await userApi.updateMe(form)
       updateUser(data.data)
+
+      const nextStatus = normalizeOnlineStatus(data?.data?.online_status || form.online_status)
+      if (socket) {
+        socket.emit('update_presence', { status: nextStatus })
+      }
+
       toast.success('Profile updated')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Update failed')

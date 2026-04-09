@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import clsx from 'clsx'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import useSocketEvents from '@/hooks/useSocketEvents'
@@ -37,13 +38,24 @@ export default function ChatLayout() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-primary">
-      {/* Left sidebar — 280px fixed */}
-      <div className="w-[360px] flex-shrink-0 flex flex-col border-r border-border">
+      {/* Left sidebar — full-width on mobile, 360px on desktop */}
+      <div
+        className={clsx(
+          'flex-shrink-0 flex flex-col border-r border-border',
+          'w-full md:w-[360px]',
+          activeConversation ? 'hidden md:flex' : 'flex'
+        )}
+      >
         <Sidebar />
       </div>
 
-      {/* Center — flex grow */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Center — hidden on mobile when no conversation selected */}
+      <div
+        className={clsx(
+          'flex-1 flex flex-col overflow-hidden',
+          !activeConversation && 'hidden md:flex'
+        )}
+      >
         {activeConversation ? (
           <ChatWindow />
         ) : (
@@ -51,9 +63,9 @@ export default function ChatLayout() {
         )}
       </div>
 
-      {/* Right info panel — 320px, only when conversation active */}
+      {/* Right info panel — hidden on mobile */}
       {activeConversation && showInfoPanel && (
-        <div className="w-[320px] flex-shrink-0 flex flex-col border-l border-border">
+        <div className="hidden md:flex w-[320px] flex-shrink-0 flex-col border-l border-border">
           <InfoPanel />
         </div>
       )}

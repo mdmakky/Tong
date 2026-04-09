@@ -420,6 +420,9 @@ function GroupInfo({ conversation, currentUser }) {
 
         <Avatar src={group.avatar_url} name={group.name} size="2xl" />
         <h3 className="mt-3 text-lg font-semibold text-text-primary">{group.name}</h3>
+        {group.unique_group_id && (
+          <p className="mt-1 text-xs text-accent-yellow">@{group.unique_group_id}</p>
+        )}
         <p className="text-sm text-text-secondary">
           {group.type === 'public' ? 'Public' : group.type === 'private' ? 'Private' : 'Secret'} group
           {' · '}{members.length} members
@@ -448,6 +451,13 @@ function GroupInfo({ conversation, currentUser }) {
               placeholder="Description"
               value={groupForm.description}
               onChange={(e) => setGroupForm((prev) => ({ ...prev, description: e.target.value }))}
+            />
+
+            <input
+              type="text"
+              className="input-field text-text-muted"
+              value={group?.unique_group_id ? `@${group.unique_group_id}` : 'No group ID'}
+              readOnly
             />
 
             <select

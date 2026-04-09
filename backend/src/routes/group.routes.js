@@ -11,11 +11,18 @@ router.use(auth);
 
 // ─── GROUPS ────────────────────────────────────
 router.get('/', groupCtrl.getGroups);
+router.get('/public/search', groupCtrl.searchPublicGroups);
+router.get('/check-unique-id/:unique_group_id', groupCtrl.checkUniqueGroupIdAvailability);
 
 router.post(
   '/',
   [
     body('name').trim().isLength({ min: 1, max: 100 }).withMessage('Group name required (1-100 chars)'),
+    body('unique_group_id')
+      .trim()
+      .isLength({ min: 3, max: 30 })
+      .matches(/^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/)
+      .withMessage('unique_group_id must be 3-30 chars using lowercase letters, numbers, _ or -'),
     body('type').optional().isIn(['public', 'private', 'secret']),
     body('max_members').optional().isInt({ min: 2, max: 1000 }),
     body('member_ids').optional().isArray(),
@@ -54,6 +61,7 @@ router.post(
 
 // ─── INVITE / JOIN / LEAVE ─────────────────────
 router.post('/join/:invite_link', groupCtrl.joinByInvite);
+router.post('/:id/join', groupCtrl.joinPublicGroup);
 router.post('/:id/leave', groupCtrl.leaveGroup);
 
 // ─── MESSAGES ──────────────────────────────────

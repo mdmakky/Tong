@@ -75,16 +75,23 @@ const initializeSocket = (io) => {
 
       // Update last_seen
       try {
+        const remainingSockets = (await io.in(`user:${socket.user.id}`).fetchSockets())
+          .filter((s) => s.id !== socket.id);
+
+        // User still has another active connection (e.g., another tab)
+        if (remainingSockets.length > 0) return;
+
+        const now = new Date();
         await prisma.user.update({
           where: { id: socket.user.id },
-          data: { last_seen: new Date(), online_status: 'offline' },
+          data: { last_seen: now },
         });
 
         // Broadcast offline status
         socket.broadcast.emit('presence_update', {
           user_id: socket.user.id,
           status: 'offline',
-          last_seen: new Date(),
+          last_seen: now,
         });
       } catch (err) {
         console.error('Disconnect update error:', err.message);

@@ -59,6 +59,15 @@ const removeUserFromGroupRoom = (req, userId, groupId) => {
   if (io) io.in(`user:${userId}`).socketsLeave(`conv:${groupId}`);
 };
 
+const UNIQUE_GROUP_ID_REGEX = /^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/;
+
+const normalizeUniqueGroupId = (value) =>
+  String(value || '')
+    .trim()
+    .toLowerCase();
+
+const isValidUniqueGroupId = (value) => UNIQUE_GROUP_ID_REGEX.test(value);
+
 // ─── GET MY GROUPS ─────────────────────────────
 export const getGroups = async (req, res, next) => {
   try {
@@ -115,17 +124,133 @@ export const getGroups = async (req, res, next) => {
   }
 };
 
+// ─── SEARCH PUBLIC GROUPS ─────────────────────
+export const searchPublicGroups = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) {
+      throw ApiError.badRequest('Search query must be at least 2 characters');
+    }
+
+    const { page, limit, skip } = getPagination(req.query.page, req.query.limit);
+    const term = q.trim();
+
+    const [groups, total] = await Promise.all([
+      prisma.group.findMany({
+        where: {
+          type: 'public',
+          OR: [
+            { name: { contains: term, mode: 'insensitive' } },
+            { description: { contains: term, mode: 'insensitive' } },
+            { unique_group_id: { contains: term, mode: 'insensitive' } },
+          ],
+        },
+        include: {
+          owner: {
+            select: { id: true, username: true, display_name: true, avatar_url: true },
+          },
+          _count: { select: { members: true } },
+        },
+        orderBy: [{ updated_at: 'desc' }],
+        skip,
+        take: limit,
+      }),
+      prisma.group.count({
+        where: {
+          type: 'public',
+          OR: [
+            { name: { contains: term, mode: 'insensitive' } },
+            { description: { contains: term, mode: 'insensitive' } },
+            { unique_group_id: { contains: term, mode: 'insensitive' } },
+          ],
+        },
+      }),
+    ]);
+
+    const groupIds = groups.map((g) => g.id);
+    const memberships = groupIds.length
+      ? await prisma.groupMember.findMany({
+          where: {
+            user_id: req.user.id,
+            group_id: { in: groupIds },
+          },
+          select: { group_id: true, role: true },
+        })
+      : [];
+
+    const membershipByGroupId = Object.fromEntries(
+      memberships.map((m) => [m.group_id, m.role])
+    );
+
+    const results = groups.map((g) => ({
+      ...g,
+      member_count: g._count?.members || 0,
+      is_joined: Boolean(membershipByGroupId[g.id]),
+      my_role: membershipByGroupId[g.id] || null,
+    }));
+
+    return ApiResponse.ok('Public groups retrieved', {
+      groups: results,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── CHECK UNIQUE GROUP ID AVAILABILITY ───────
+export const checkUniqueGroupIdAvailability = async (req, res, next) => {
+  try {
+    const normalized = normalizeUniqueGroupId(req.params.unique_group_id);
+
+    if (!isValidUniqueGroupId(normalized)) {
+      throw ApiError.badRequest(
+        'unique_group_id must be 3-30 chars using lowercase letters, numbers, _ or -'
+      );
+    }
+
+    const existing = await prisma.group.findUnique({
+      where: { unique_group_id: normalized },
+      select: { id: true },
+    });
+
+    return ApiResponse.ok('Unique group ID availability', {
+      unique_group_id: normalized,
+      available: !existing,
+    }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── CREATE GROUP ──────────────────────────────
 export const createGroup = async (req, res, next) => {
   try {
-    const { name, description, type, max_members, is_invite_only, member_ids } = req.body;
+    const { name, unique_group_id, description, type, max_members, is_invite_only, member_ids } = req.body;
     const initialMemberIds = Array.isArray(member_ids)
       ? member_ids.filter((id) => id !== req.user.id).slice(0, 255)
       : [];
 
+    const normalizedUniqueGroupId = normalizeUniqueGroupId(unique_group_id);
+    if (!isValidUniqueGroupId(normalizedUniqueGroupId)) {
+      throw ApiError.badRequest(
+        'unique_group_id must be 3-30 chars using lowercase letters, numbers, _ or -'
+      );
+    }
+
+    const existingGroup = await prisma.group.findUnique({
+      where: { unique_group_id: normalizedUniqueGroupId },
+      select: { id: true },
+    });
+
+    if (existingGroup) {
+      throw ApiError.conflict('This unique group ID is already taken');
+    }
+
     const group = await prisma.group.create({
       data: {
         name,
+        unique_group_id: normalizedUniqueGroupId,
         description: description || null,
         type: type || 'private',
         owner_id: req.user.id,
@@ -506,6 +631,94 @@ export const joinByInvite = async (req, res, next) => {
         avatar_url: req.user.avatar_url,
       },
       added_by: req.user.id,
+    });
+
+    return ApiResponse.ok('Joined group successfully', {
+      ...joined,
+      my_role: newMember.role,
+    }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── JOIN PUBLIC GROUP ────────────────────────
+export const joinPublicGroup = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const group = await prisma.group.findUnique({ where: { id } });
+    if (!group) throw ApiError.notFound('Group not found');
+
+    if (group.type !== 'public') {
+      throw ApiError.forbidden('This group cannot be joined directly');
+    }
+
+    if (group.is_invite_only) {
+      throw ApiError.forbidden('This public group requires an invite link');
+    }
+
+    const existing = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: id, user_id: req.user.id } },
+    });
+
+    if (existing) {
+      const alreadyJoined = await prisma.group.findUnique({
+        where: { id },
+        include: {
+          owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+          _count: { select: { members: true } },
+        },
+      });
+
+      return ApiResponse.ok('You are already a member', {
+        ...alreadyJoined,
+        my_role: existing.role,
+      }).send(res);
+    }
+
+    const memberCount = await prisma.groupMember.count({ where: { group_id: id } });
+    if (memberCount >= group.max_members) {
+      throw ApiError.badRequest('Group is full');
+    }
+
+    const newMember = await prisma.groupMember.create({
+      data: { group_id: id, user_id: req.user.id, role: 'member' },
+    });
+
+    await Message.create({
+      conversation_id: id,
+      conversation_type: 'group',
+      sender_id: req.user.id,
+      message_type: 'system',
+      content: { text: `${req.user.display_name} joined the group` },
+    });
+
+    const joined = await prisma.group.findUnique({
+      where: { id },
+      include: {
+        owner: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        _count: { select: { members: true } },
+      },
+    });
+
+    emitToGroupRoom(req, id, 'member_joined', {
+      group_id: id,
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        display_name: req.user.display_name,
+        avatar_url: req.user.avatar_url,
+      },
+      added_by: req.user.id,
+    });
+
+    emitToUserRoom(req, req.user.id, 'new_conversation', {
+      type: 'group',
+      group: {
+        ...joined,
+        my_role: 'member',
+      },
     });
 
     return ApiResponse.ok('Joined group successfully', {
