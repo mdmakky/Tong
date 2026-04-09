@@ -157,6 +157,47 @@ export default function ContactSearch() {
             </div>
           )
         })}
+
+        {groups.length > 0 && (
+          <p className="text-[11px] uppercase tracking-wide text-text-muted px-1 pt-3 pb-1">Public groups</p>
+        )}
+        {groups.map((group) => {
+          const memberCount = group.member_count || group._count?.members || 0
+          const isJoined = Boolean(group.is_joined || group.my_role)
+          const isJoining = joiningGroupId === group.id
+
+          return (
+            <div key={group.id} className="flex items-center gap-3 py-2.5">
+              <Avatar src={group.avatar_url} name={group.name} size="md" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary truncate">{group.name}</p>
+                <p className="text-xs text-text-muted truncate">
+                  {group.description || `${memberCount} members`}
+                </p>
+              </div>
+              <button
+                onClick={() => handleGroupAction(group)}
+                disabled={isJoining}
+                className="px-2.5 py-1.5 rounded-lg border border-border text-xs text-text-secondary hover:text-text-primary hover:border-accent-yellow/40 hover:bg-surface-hover transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
+                title={isJoined ? 'Open group chat' : 'Join group'}
+              >
+                {isJoining ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : isJoined ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    Open
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-3.5 h-3.5" />
+                    Join
+                  </>
+                )}
+              </button>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
