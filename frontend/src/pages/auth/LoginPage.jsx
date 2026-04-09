@@ -3,8 +3,16 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import useAuthStore from '@/store/authStore'
+import useSeo from '@/hooks/useSeo'
 
 export default function LoginPage() {
+  useSeo({
+    title: 'Sign In',
+    description: 'Sign in to your Tong Chat account.',
+    canonicalPath: '/login',
+    noIndex: true,
+  })
+
   const navigate = useNavigate()
   const { login, isLoading } = useAuthStore()
 
@@ -31,7 +39,7 @@ export default function LoginPage() {
 
     if (result.success) {
       toast.success('Welcome back!')
-      navigate('/')
+      navigate('/app')
     } else if (result.requires2FA) {
       setRequires2FA(true)
       toast('Enter your 2FA code to continue', { icon: '🔐' })

@@ -125,7 +125,7 @@ export default function GroupList() {
                 <Avatar
                   src={group.avatar_url}
                   name={group.name}
-                  size="md"
+                  size="lg"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">

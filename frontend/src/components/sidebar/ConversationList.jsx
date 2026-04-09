@@ -131,7 +131,7 @@ export default function ConversationList() {
                 <Avatar
                   src={other?.avatar_url}
                   name={other?.display_name || 'User'}
-                  size="md"
+                  size="lg"
                   status={status}
                 />
                 <div className="flex-1 min-w-0">
@@ -163,10 +163,11 @@ export default function ConversationList() {
                         conv.last_message?.sender_id === user?.id &&
                         conv.last_message?.status === 'read' &&
                         conv.last_message?.read_by && (
-                          <img
+                          <Avatar
                             src={conv.last_message.read_by.reader_avatar_url || other?.avatar_url}
-                            alt="Seen"
-                            className="w-4 h-4 rounded-full object-cover ring-1 ring-bg-primary"
+                            name={conv.last_message.read_by.reader_display_name || other?.display_name || 'Seen'}
+                            size="2xs"
+                            className="ring-1 ring-bg-primary"
                           />
                         )}
                     </div>

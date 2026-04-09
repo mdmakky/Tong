@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import useAuthStore from '@/store/authStore'
 import { initSocket } from '@/lib/socket'
 import ChatLayout from '@/pages/ChatLayout'
+import LandingPage from '@/pages/LandingPage'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
 import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage'
@@ -15,7 +16,7 @@ function ProtectedRoute({ children }) {
 
 function PublicRoute({ children }) {
   const { isAuthenticated } = useAuthStore()
-  return !isAuthenticated ? children : <Navigate to="/" replace />
+  return !isAuthenticated ? children : <Navigate to="/app" replace />
 }
 
 export default function App() {
@@ -35,8 +36,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<LandingPage />} />
         <Route
-          path="/"
+          path="/app"
           element={
             <ProtectedRoute>
               <ChatLayout />

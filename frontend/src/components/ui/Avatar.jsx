@@ -3,6 +3,7 @@ import clsx from 'clsx'
 import { getInitials } from '@/utils/helpers'
 
 const SIZE_MAP = {
+  '2xs': 'w-5 h-5 text-[9px]',
   xs: 'w-7 h-7 text-xs',
   sm: 'w-8 h-8 text-xs',
   md: 'w-10 h-10 text-sm',
@@ -20,6 +21,7 @@ const STATUS_MAP = {
 }
 
 const STATUS_DOT_SIZE = {
+  '2xs': 'w-1.5 h-1.5',
   xs: 'w-2 h-2',
   sm: 'w-2 h-2',
   md: 'w-2.5 h-2.5',

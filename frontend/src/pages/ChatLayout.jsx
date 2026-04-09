@@ -9,9 +9,17 @@ import Sidebar from '@/components/sidebar/Sidebar'
 import ChatWindow from '@/components/chat/ChatWindow'
 import InfoPanel from '@/components/infopanel/InfoPanel'
 import EmptyChatState from '@/components/chat/EmptyChatState'
+import useSeo from '@/hooks/useSeo'
 
 export default function ChatLayout() {
   const { activeConversation, showInfoPanel, toggleInfoPanel, setConversations, setGroups } = useChatStore()
+
+  useSeo({
+    title: 'App',
+    description: 'Private messaging workspace for Tong Chat users.',
+    canonicalPath: '/app',
+    noIndex: true,
+  })
 
   // Register all socket events
   useSocketEvents()
