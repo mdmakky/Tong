@@ -30,21 +30,21 @@ const persistActiveChat = (conversation, type) => {
       ACTIVE_CHAT_STORAGE_KEY,
       JSON.stringify({ conversation, type })
     )
-  } catch (_) {}
+  } catch (_) { }
 }
 
 const readPersistedSidebarTab = () => {
   try {
     const raw = localStorage.getItem(SIDEBAR_TAB_STORAGE_KEY)
     if (raw === 'chats' || raw === 'groups' || raw === 'contacts') return raw
-  } catch (_) {}
+  } catch (_) { }
   return 'chats'
 }
 
 const persistSidebarTab = (tab) => {
   try {
     localStorage.setItem(SIDEBAR_TAB_STORAGE_KEY, tab)
-  } catch (_) {}
+  } catch (_) { }
 }
 
 const persistedActive = readPersistedActiveChat()
