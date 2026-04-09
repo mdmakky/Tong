@@ -54,6 +54,7 @@ export const messageApi = {
 // ─── Groups ───────────────────────────────────────────────────────────────────
 export const groupApi = {
   list: () => api.get('/groups'),
+  searchPublic: (q, params = {}) => api.get('/groups/public/search', { params: { q, ...params } }),
   create: (data) => api.post('/groups', data),
   get: (id) => api.get(`/groups/${id}`),
   update: (id, data) => api.put(`/groups/${id}`, data),
@@ -66,6 +67,7 @@ export const groupApi = {
   muteMember: (id, userId, duration) =>
     api.post(`/groups/${id}/members/${userId}/mute`, { duration }),
   join: (inviteLink) => api.post(`/groups/join/${inviteLink}`),
+  joinPublic: (id) => api.post(`/groups/${id}/join`),
   leave: (id) => api.post(`/groups/${id}/leave`),
   getMessages: (id, params) => api.get(`/groups/${id}/messages`, { params }),
   sendMessage: (id, data) => api.post(`/groups/${id}/messages`, data),
