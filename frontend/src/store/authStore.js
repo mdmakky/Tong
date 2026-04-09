@@ -66,6 +66,8 @@ const useAuthStore = create(
         } catch (_) {}
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
+        localStorage.removeItem('activeChatSelection')
+        localStorage.removeItem('sidebarTab')
         disconnectSocket()
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
       },

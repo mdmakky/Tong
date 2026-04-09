@@ -428,6 +428,26 @@ export const getMessages = async (req, res, next) => {
 
     if (!conversation) throw ApiError.notFound('Conversation not found');
 
+    // Persist read state when opening a direct conversation from REST.
+    if (!before && effectiveSkip === 0) {
+      const readAt = new Date();
+      await Message.updateMany(
+        {
+          conversation_id: id,
+          sender_id: { $ne: userId },
+          is_deleted: false,
+          deleted_for_all: false,
+          deleted_for: { $ne: userId },
+          'read_receipts.user_id': { $ne: userId },
+        },
+        {
+          $addToSet: {
+            read_receipts: { user_id: userId, read_at: readAt },
+          },
+        }
+      );
+    }
+
     const query = {
       conversation_id: id,
       deleted_for: { $ne: userId },

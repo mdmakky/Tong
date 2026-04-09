@@ -1,9 +1,58 @@
 import { create } from 'zustand'
 
+const ACTIVE_CHAT_STORAGE_KEY = 'activeChatSelection'
+const SIDEBAR_TAB_STORAGE_KEY = 'sidebarTab'
+
+const readPersistedActiveChat = () => {
+  try {
+    const raw = localStorage.getItem(ACTIVE_CHAT_STORAGE_KEY)
+    if (!raw) return { conversation: null, type: null }
+
+    const parsed = JSON.parse(raw)
+    if (!parsed?.conversation?.id || !parsed?.type) {
+      return { conversation: null, type: null }
+    }
+
+    return { conversation: parsed.conversation, type: parsed.type }
+  } catch (_) {
+    return { conversation: null, type: null }
+  }
+}
+
+const persistActiveChat = (conversation, type) => {
+  try {
+    if (!conversation || !type) {
+      localStorage.removeItem(ACTIVE_CHAT_STORAGE_KEY)
+      return
+    }
+
+    localStorage.setItem(
+      ACTIVE_CHAT_STORAGE_KEY,
+      JSON.stringify({ conversation, type })
+    )
+  } catch (_) {}
+}
+
+const readPersistedSidebarTab = () => {
+  try {
+    const raw = localStorage.getItem(SIDEBAR_TAB_STORAGE_KEY)
+    if (raw === 'chats' || raw === 'groups' || raw === 'contacts') return raw
+  } catch (_) {}
+  return 'chats'
+}
+
+const persistSidebarTab = (tab) => {
+  try {
+    localStorage.setItem(SIDEBAR_TAB_STORAGE_KEY, tab)
+  } catch (_) {}
+}
+
+const persistedActive = readPersistedActiveChat()
+
 const useChatStore = create((set, get) => ({
   // Active conversation/group
-  activeConversation: null,
-  activeType: null, // 'direct' | 'group'
+  activeConversation: persistedActive.conversation,
+  activeType: persistedActive.type, // 'direct' | 'group'
 
   // Conversations & groups list
   conversations: [],
@@ -29,7 +78,7 @@ const useChatStore = create((set, get) => ({
   // UI state
   replyTo: null,
   searchQuery: '',
-  sidebarTab: 'chats', // 'chats' | 'groups' | 'contacts'
+  sidebarTab: readPersistedSidebarTab(), // 'chats' | 'groups' | 'contacts'
   showInfoPanel: true,
   pinnedConversations: JSON.parse(localStorage.getItem('pinnedConversations') || '[]'),
 
@@ -38,11 +87,14 @@ const useChatStore = create((set, get) => ({
   setSocket: (s) => set({ socket: s }),
 
   setActiveConversation: (conv, type) => {
+    const resolvedType = type || conv?.type || null
     set({
       activeConversation: conv,
-      activeType: type,
+      activeType: resolvedType,
       replyTo: null,
     })
+    persistActiveChat(conv, resolvedType)
+
     // Clear unread
     if (conv) {
       set((state) => ({
@@ -51,10 +103,13 @@ const useChatStore = create((set, get) => ({
     }
   },
 
-  removeConversation: (convId) =>
+  removeConversation: (convId) => {
+    const isActiveDirect =
+      get().activeType !== 'group' && get().activeConversation?.id === convId
+
     set((state) => {
       const isActiveDirect =
-        state.activeType === 'direct' && state.activeConversation?.id === convId
+        state.activeType !== 'group' && state.activeConversation?.id === convId
 
       return {
         conversations: state.conversations.filter((c) => c.id !== convId),
@@ -77,7 +132,10 @@ const useChatStore = create((set, get) => ({
         activeType: isActiveDirect ? null : state.activeType,
         replyTo: isActiveDirect ? null : state.replyTo,
       }
-    }),
+    })
+
+    if (isActiveDirect) persistActiveChat(null, null)
+  },
 
   setConversations: (convs) =>
     set((state) => {
@@ -132,7 +190,10 @@ const useChatStore = create((set, get) => ({
     })
   },
 
-  removeGroup: (groupId) =>
+  removeGroup: (groupId) => {
+    const isActiveGroup =
+      get().activeType === 'group' && get().activeConversation?.id === groupId
+
     set((state) => ({
       groups: state.groups.filter((g) => g.id !== groupId),
       messages: Object.fromEntries(
@@ -146,7 +207,10 @@ const useChatStore = create((set, get) => ({
         state.activeType === 'group' && state.activeConversation?.id === groupId
           ? null
           : state.activeType,
-    })),
+    }))
+
+    if (isActiveGroup) persistActiveChat(null, null)
+  },
 
   // Messages
   setMessages: (convId, msgs, append = false) => {
@@ -274,7 +338,10 @@ const useChatStore = create((set, get) => ({
   setReplyTo: (msg) => set({ replyTo: msg }),
   clearReplyTo: () => set({ replyTo: null }),
   setSearchQuery: (q) => set({ searchQuery: q }),
-  setSidebarTab: (tab) => set({ sidebarTab: tab }),
+  setSidebarTab: (tab) => {
+    persistSidebarTab(tab)
+    set({ sidebarTab: tab })
+  },
   toggleInfoPanel: () => set((state) => ({ showInfoPanel: !state.showInfoPanel })),
 
   togglePinConversation: (convId) => {
