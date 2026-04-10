@@ -149,16 +149,11 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
     }
 
     try {
-      if (socket) {
-        socket.emit('edit_message', {
-          message_id: msg._id || msg.id,
-          text: editText.trim(),
-        })
-      } else {
-        await messageApi.edit(msg._id || msg.id, editText.trim())
-      }
+      // Always use REST API to guarantee the edit is persisted,
+      // then let the socket broadcast update the UI for all participants.
+      await messageApi.edit(msg._id || msg.id, editText.trim())
 
-      // Update locally
+      // Update locally immediately (socket broadcast will also arrive shortly)
       updateMessage(conversationId, msg._id || msg.id, {
         content: { ...msg.content, text: editText.trim() },
         is_edited: true,

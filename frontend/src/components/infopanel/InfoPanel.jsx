@@ -38,9 +38,7 @@ export default function InfoPanel() {
 function DirectInfo({ conversation, currentUser, presenceMap }) {
   const [blockLoading, setBlockLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const [nicknameLoading, setNicknameLoading] = useState(false)
-  const [editingNickname, setEditingNickname] = useState(false)
-  const [nicknameDraft, setNicknameDraft] = useState('')
+  const [showNicknamesModal, setShowNicknamesModal] = useState(false)
   const { upsertConversation, removeConversation, setActiveConversation, togglePinConversation, pinnedConversations, setNickname, nicknames } = useChatStore()
 
   const isPinned = pinnedConversations.includes(conversation.id)
@@ -72,40 +70,6 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
       loadNickname()
     }
   }, [conversation?.id, setNickname])
-
-  const handleSaveNickname = async () => {
-    setNicknameLoading(true)
-    try {
-      const newNickname = nicknameDraft.trim() || null
-      await conversationApi.setNickname(conversation.id, newNickname)
-      setNickname(conversation.id, newNickname)
-      setEditingNickname(false)
-      toast.success(newNickname ? 'Nickname saved' : 'Nickname cleared')
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to save nickname')
-    } finally {
-      setNicknameLoading(false)
-    }
-  }
-
-  const handleStartEdit = () => {
-    setNicknameDraft(currentNickname)
-    setEditingNickname(true)
-  }
-
-  const handleClearNickname = async () => {
-    setNicknameLoading(true)
-    try {
-      await conversationApi.setNickname(conversation.id, null)
-      setNickname(conversation.id, null)
-      setEditingNickname(false)
-      toast.success('Nickname cleared')
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to clear nickname')
-    } finally {
-      setNicknameLoading(false)
-    }
-  }
 
   const handleBlock = async () => {
     if (!other?.id) return
@@ -159,57 +123,9 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
       {/* Avatar */}
       <Avatar src={other?.avatar_url} name={other?.display_name} size="xl" status={status} />
 
-      {/* Nickname editing section */}
-      {editingNickname ? (
-        <div className="mt-3 w-full px-2">
-          <input
-            type="text"
-            value={nicknameDraft}
-            onChange={(e) => setNicknameDraft(e.target.value)}
-            placeholder="Enter nickname..."
-            className="w-full bg-bg-tertiary border border-border text-text-primary rounded-lg px-3 py-2 text-sm placeholder:text-text-muted focus:outline-none focus:border-accent-yellow/50"
-            autoFocus
-          />
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={handleSaveNickname}
-              disabled={nicknameLoading}
-              className="flex-1 px-3 py-1.5 bg-accent-yellow text-black text-sm rounded font-medium hover:bg-accent-yellow-dim transition-colors disabled:opacity-50"
-            >
-              {nicknameLoading ? 'Saving...' : 'Save'}
-            </button>
-            <button
-              onClick={handleClearNickname}
-              disabled={nicknameLoading}
-              className="flex-1 px-3 py-1.5 bg-red-500/20 text-red-400 text-sm rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
-              title="Clear and delete nickname"
-            >
-              {nicknameLoading ? 'Clearing...' : 'Delete'}
-            </button>
-            <button
-              onClick={() => setEditingNickname(false)}
-              disabled={nicknameLoading}
-              className="flex-1 px-3 py-1.5 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {currentNickname ? (
-            <h3 className="mt-3 text-lg font-semibold text-accent-yellow">{currentNickname}</h3>
-          ) : null}
-          <h3 className="mt-1 text-lg font-semibold text-text-primary">{other?.display_name}</h3>
-          <p className="text-sm text-text-secondary">@{other?.username}</p>
-          <button
-            onClick={handleStartEdit}
-            className="mt-2 text-xs px-3 py-1 bg-bg-tertiary border border-border text-text-secondary rounded hover:bg-surface-hover transition-colors"
-          >
-            {currentNickname ? 'Edit nickname' : 'Add nickname'}
-          </button>
-        </>
-      )}
+      {/* User info */}
+      <h3 className="mt-3 text-lg font-semibold text-text-primary">{other?.display_name}</h3>
+      <p className="text-sm text-text-secondary">@{other?.username}</p>
 
       {/* Status */}
       <p className="mt-1 text-xs text-text-muted">
@@ -230,6 +146,15 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
         <p className="mt-1 text-xs text-accent-yellow text-center px-2">"{other.custom_status}"</p>
       )}
 
+      {/* Nicknames button */}
+      <button
+        onClick={() => setShowNicknamesModal(true)}
+        className="mt-4 w-full px-4 py-2 bg-bg-tertiary border border-border text-text-primary rounded-lg hover:bg-surface-hover transition-colors flex items-center justify-center gap-2"
+      >
+        <UserCog size={18} />
+        <span className="text-sm font-medium">Nicknames</span>
+      </button>
+
       {/* Actions */}
       <div className="mt-4 self-stretch space-y-1">
         <ActionRow
@@ -246,6 +171,218 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
           disabled={deleteLoading}
         />
         <ActionRow icon={Flag} label="Report" danger />
+      </div>
+
+      {/* Nicknames Modal */}
+      {showNicknamesModal && (
+        <NicknamesModal
+          conversation={conversation}
+          currentUser={currentUser}
+          other={other}
+          onClose={() => setShowNicknamesModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Nicknames Modal ───────────────────────────────────────────────────────────
+function NicknamesModal({ conversation, currentUser, other, onClose }) {
+  const { nicknames, setNickname } = useChatStore()
+  const currentNickname = nicknames[conversation.id] || ''
+  const [selfNickname, setSelfNickname] = useState('')
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [nicknameDraft, setNicknameDraft] = useState('')
+  const [nicknameLoading, setNicknameLoading] = useState(false)
+
+  // Load self nickname on mount
+  useEffect(() => {
+    const loadSelfNickname = async () => {
+      try {
+        const { data } = await conversationApi.getSelfNickname(conversation.id)
+        const nickname = data?.data?.self_nickname || ''
+        setSelfNickname(nickname)
+      } catch (_) {
+        // Silently fail if not found
+      }
+    }
+    if (conversation?.id) {
+      loadSelfNickname()
+    }
+  }, [conversation?.id])
+
+  const handleStartEdit = (userId, currentNick) => {
+    setNicknameDraft(currentNick)
+    setEditingUserId(userId)
+  }
+
+  const handleSaveNickname = async () => {
+    setNicknameLoading(true)
+    try {
+      const newNickname = nicknameDraft.trim() || null
+
+      if (editingUserId === currentUser?.id) {
+        // Save self nickname
+        await conversationApi.setSelfNickname(conversation.id, newNickname)
+        setSelfNickname(newNickname)
+      } else {
+        // Save other user's nickname
+        await conversationApi.setNickname(conversation.id, newNickname)
+        setNickname(conversation.id, newNickname)
+      }
+
+      setEditingUserId(null)
+      toast.success(newNickname ? 'Nickname saved' : 'Nickname cleared')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save nickname')
+    } finally {
+      setNicknameLoading(false)
+    }
+  }
+
+  const handleClearNickname = async () => {
+    setNicknameLoading(true)
+    try {
+      if (editingUserId === currentUser?.id) {
+        // Clear self nickname
+        await conversationApi.setSelfNickname(conversation.id, null)
+        setSelfNickname(null)
+      } else {
+        // Clear other user's nickname
+        await conversationApi.setNickname(conversation.id, null)
+        setNickname(conversation.id, null)
+      }
+
+      setEditingUserId(null)
+      toast.success('Nickname cleared')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to clear nickname')
+    } finally {
+      setNicknameLoading(false)
+    }
+  }
+
+  // Determine which user is being edited
+  const editingUser = editingUserId === other?.id ? other : editingUserId === currentUser?.id ? currentUser : null
+  const editingNickname = editingUserId === other?.id ? currentNickname : editingUserId === currentUser?.id ? selfNickname : ''
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-bg-secondary border border-border rounded-lg shadow-lg max-w-sm w-11/12 max-h-96 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-text-primary">Nicknames</h2>
+          <button
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {editingUserId ? (
+            <div className="space-y-3">
+              <p className="text-sm text-text-secondary mb-3">Editing nickname for {editingUser?.display_name}</p>
+              <input
+                type="text"
+                value={nicknameDraft}
+                onChange={(e) => setNicknameDraft(e.target.value)}
+                placeholder="Enter nickname..."
+                className="w-full bg-bg-tertiary border border-border text-text-primary rounded-lg px-3 py-2 text-sm placeholder:text-text-muted focus:outline-none focus:border-accent-yellow/50"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveNickname}
+                  disabled={nicknameLoading}
+                  className="flex-1 px-3 py-2 bg-accent-yellow text-black text-sm rounded font-medium hover:bg-accent-yellow-dim transition-colors disabled:opacity-50"
+                >
+                  {nicknameLoading ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={handleClearNickname}
+                  disabled={nicknameLoading}
+                  className="flex-1 px-3 py-2 bg-red-500/20 text-red-400 text-sm rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                >
+                  {nicknameLoading ? 'Clearing...' : 'Delete'}
+                </button>
+                <button
+                  onClick={() => setEditingUserId(null)}
+                  disabled={nicknameLoading}
+                  className="flex-1 px-3 py-2 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Current User (Self) */}
+              <div className="flex items-center justify-between p-3 bg-bg-tertiary rounded-lg">
+                <div className="flex items-center gap-3 flex-1">
+                  <Avatar src={currentUser?.avatar_url} name={currentUser?.display_name} size="sm" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-accent-yellow">
+                        {selfNickname || currentUser?.display_name}
+                      </p>
+                      {selfNickname && (
+                        <p className="text-xs text-text-muted">({currentUser?.display_name})</p>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-secondary">@{currentUser?.username}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleStartEdit(currentUser?.id, selfNickname)}
+                  className="p-1 hover:bg-surface-hover rounded transition-colors flex-shrink-0"
+                  title="Edit nickname"
+                >
+                  <UserCog size={18} className="text-text-secondary hover:text-accent-yellow" />
+                </button>
+              </div>
+
+              {/* Other User */}
+              <div className="flex items-center justify-between p-3 bg-bg-tertiary rounded-lg">
+                <div className="flex items-center gap-3 flex-1">
+                  <Avatar src={other?.avatar_url} name={other?.display_name} size="sm" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-text-primary">
+                        {currentNickname || other?.display_name}
+                      </p>
+                      {currentNickname && (
+                        <p className="text-xs text-text-muted">({other?.display_name})</p>
+                      )}
+                    </div>
+                    <p className="text-xs text-text-secondary">@{other?.username}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleStartEdit(other?.id, currentNickname)}
+                  className="p-1 hover:bg-surface-hover rounded transition-colors flex-shrink-0"
+                  title="Edit nickname"
+                >
+                  <UserCog size={18} className="text-text-secondary hover:text-accent-yellow" />
+                </button>
+              </div>
+
+              <p className="text-xs text-text-muted text-center mt-2">You can set nicknames for both users</p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border p-4">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 bg-bg-tertiary border border-border text-text-primary rounded-lg hover:bg-surface-hover transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -35,10 +35,15 @@ export default function useSocketEvents() {
     const onNewMessage = (message) => {
       const convId = message.conversation_id
       appendMessage(convId, message)
-      incrementUnread(convId)
+
+      // Skip unread increment for system messages
+      if (message.message_type !== 'system') {
+        incrementUnread(convId)
+      }
 
       // Auto-acknowledge delivery so the sender sees double-tick in real-time
-      if (message._id && message.conversation_type !== 'group') {
+      // Skip for system messages
+      if (message._id && message.conversation_type !== 'group' && message.message_type !== 'system') {
         socket.emit('mark_delivered', { message_id: message._id })
       }
 
@@ -48,7 +53,8 @@ export default function useSocketEvents() {
       const store = useChatStore.getState()
       if (
         store.activeConversation?.id === convId &&
-        message.sender_id !== currentUserId
+        message.sender_id !== currentUserId &&
+        message.message_type !== 'system'
       ) {
         socket.emit('message_read', {
           conversation_id: convId,
@@ -135,8 +141,11 @@ export default function useSocketEvents() {
 
     // ─── Message edited ───
     const onEdited = ({ message_id, conversation_id, new_content, is_edited, edited_at }) => {
+      const current = useChatStore.getState().messages[conversation_id]?.find(
+        (m) => (m._id || m.id) === message_id
+      )
       updateMessage(conversation_id, message_id, {
-        content: new_content,
+        content: { ...(current?.content || {}), ...new_content },
         is_edited: true,
         edited_at
       })
