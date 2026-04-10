@@ -5,7 +5,7 @@ import Avatar from '@/components/ui/Avatar'
 import { formatLastSeen } from '@/utils/helpers'
 
 export default function ChatHeader() {
-  const { activeConversation, activeType, presenceMap, typingUsers, toggleInfoPanel, showInfoPanel, setActiveConversation, pinnedConversations, pinnedGroups, togglePinConversation, togglePinGroup } = useChatStore()
+  const { activeConversation, activeType, presenceMap, typingUsers, toggleInfoPanel, showInfoPanel, setActiveConversation, pinnedConversations, pinnedGroups, togglePinConversation, togglePinGroup, nicknames } = useChatStore()
   const { user } = useAuthStore()
 
   if (!activeConversation) return null
@@ -29,7 +29,9 @@ export default function ChatHeader() {
         : activeConversation.user1) ||
       null
 
-    displayName = other?.display_name || 'User'
+    // Use nickname if available, otherwise use real name
+    const nickname = nicknames[convId]
+    displayName = nickname || other?.display_name || 'User'
     avatarUrl = other?.avatar_url
     const presence = other ? presenceMap[other.id] : null
     status = presence?.status || other?.online_status || 'offline'

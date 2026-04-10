@@ -41,10 +41,10 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
   const [nicknameLoading, setNicknameLoading] = useState(false)
   const [editingNickname, setEditingNickname] = useState(false)
   const [nicknameDraft, setNicknameDraft] = useState('')
-  const [currentNickname, setCurrentNickname] = useState('')
-  const { upsertConversation, removeConversation, setActiveConversation, togglePinConversation, pinnedConversations } = useChatStore()
+  const { upsertConversation, removeConversation, setActiveConversation, togglePinConversation, pinnedConversations, setNickname, nicknames } = useChatStore()
 
   const isPinned = pinnedConversations.includes(conversation.id)
+  const currentNickname = nicknames[conversation.id] || ''
 
   const other =
     conversation.other_user ||
@@ -63,7 +63,7 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
       try {
         const { data } = await conversationApi.getNickname(conversation.id)
         const nickname = data?.data?.nickname || ''
-        setCurrentNickname(nickname)
+        setNickname(conversation.id, nickname)
       } catch (_) {
         // Silently fail if not found
       }
@@ -71,15 +71,16 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
     if (conversation?.id) {
       loadNickname()
     }
-  }, [conversation?.id])
+  }, [conversation?.id, setNickname])
 
   const handleSaveNickname = async () => {
     setNicknameLoading(true)
     try {
-      await conversationApi.setNickname(conversation.id, nicknameDraft.trim() || null)
-      setCurrentNickname(nicknameDraft.trim())
+      const newNickname = nicknameDraft.trim() || null
+      await conversationApi.setNickname(conversation.id, newNickname)
+      setNickname(conversation.id, newNickname)
       setEditingNickname(false)
-      toast.success(nicknameDraft ? 'Nickname saved' : 'Nickname cleared')
+      toast.success(newNickname ? 'Nickname saved' : 'Nickname cleared')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save nickname')
     } finally {
@@ -90,6 +91,20 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
   const handleStartEdit = () => {
     setNicknameDraft(currentNickname)
     setEditingNickname(true)
+  }
+
+  const handleClearNickname = async () => {
+    setNicknameLoading(true)
+    try {
+      await conversationApi.setNickname(conversation.id, null)
+      setNickname(conversation.id, null)
+      setEditingNickname(false)
+      toast.success('Nickname cleared')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to clear nickname')
+    } finally {
+      setNicknameLoading(false)
+    }
   }
 
   const handleBlock = async () => {
@@ -143,7 +158,7 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
 
       {/* Avatar */}
       <Avatar src={other?.avatar_url} name={other?.display_name} size="xl" status={status} />
-      
+
       {/* Nickname editing section */}
       {editingNickname ? (
         <div className="mt-3 w-full px-2">
@@ -164,8 +179,17 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
               {nicknameLoading ? 'Saving...' : 'Save'}
             </button>
             <button
+              onClick={handleClearNickname}
+              disabled={nicknameLoading}
+              className="flex-1 px-3 py-1.5 bg-red-500/20 text-red-400 text-sm rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
+              title="Clear and delete nickname"
+            >
+              {nicknameLoading ? 'Clearing...' : 'Delete'}
+            </button>
+            <button
               onClick={() => setEditingNickname(false)}
-              className="flex-1 px-3 py-1.5 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors"
+              disabled={nicknameLoading}
+              className="flex-1 px-3 py-1.5 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors disabled:opacity-50"
             >
               Cancel
             </button>

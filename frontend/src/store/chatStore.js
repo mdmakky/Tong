@@ -72,6 +72,9 @@ const useChatStore = create((set, get) => ({
   // Presence (online status)
   presenceMap: {}, // { userId: { status, last_seen } }
 
+  // Nicknames (one-on-one chats)
+  nicknames: {}, // { convId: nickname }
+
   // Socket instance (stored here so React can react to changes)
   socket: null,
 
@@ -380,6 +383,26 @@ const useChatStore = create((set, get) => ({
       },
     }))
   },
+
+  // Nickname management
+  setNickname: (convId, nickname) => {
+    set((state) => ({
+      nicknames: {
+        ...state.nicknames,
+        [convId]: nickname || null,
+      },
+    }))
+  },
+
+  getNickname: (convId) => {
+    const state = get()
+    return state.nicknames[convId] || null
+  },
+
+  setNicknames: (nicknamesMap) => {
+    set({ nicknames: nicknamesMap })
+  },
 }))
 
 export default useChatStore
+

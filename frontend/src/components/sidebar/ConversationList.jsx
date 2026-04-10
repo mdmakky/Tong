@@ -12,7 +12,6 @@ import { formatConvTime, truncate } from '@/utils/helpers'
 export default function ConversationList() {
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState(null)
-  const [nicknames, setNicknamesMap] = useState({}) // Store nicknames by conversation ID
   const {
     conversations,
     activeConversation,
@@ -21,6 +20,8 @@ export default function ConversationList() {
     unreadCounts,
     presenceMap,
     pinnedConversations,
+    nicknames,
+    setNicknames,
   } = useChatStore()
   const { user } = useAuthStore()
 
@@ -40,7 +41,7 @@ export default function ConversationList() {
             // Silently fail for each one
           }
         }
-        setNicknamesMap(nicknameMap)
+        setNicknames(nicknameMap)
       } catch (_) {
         // Error loading nicknames
       }
@@ -48,7 +49,7 @@ export default function ConversationList() {
     if (conversations.length > 0) {
       loadNicknames()
     }
-  }, [conversations.length])
+  }, [conversations.length, setNicknames])
 
   // Reload the active conversation's nickname to get fresh data from the InfoPanel
   useEffect(() => {
@@ -57,16 +58,16 @@ export default function ConversationList() {
       try {
         const { data } = await conversationApi.getNickname(activeConversation.id)
         const nickname = data?.data?.nickname
-        setNicknamesMap((prev) => ({
-          ...prev,
+        setNicknames({
+          ...nicknames,
           [activeConversation.id]: nickname || undefined,
-        }))
+        })
       } catch (_) {
         // Silently fail
       }
     }
     loadActiveNickname()
-  }, [activeConversation?.id])
+  }, [activeConversation?.id, setNicknames])
 
   const filtered = conversations
     .filter((conv) => {

@@ -55,11 +55,11 @@ export const getConversations = async (req, res, next) => {
     const conversationIds = conversations.map((conv) => conv.id);
     const hiddenEntries = conversationIds.length > 0
       ? await ConversationVisibility.find({
-          user_id: userId,
-          conversation_id: { $in: conversationIds },
-        })
-          .select('conversation_id')
-          .lean()
+        user_id: userId,
+        conversation_id: { $in: conversationIds },
+      })
+        .select('conversation_id')
+        .lean()
       : [];
     const hiddenConversationIds = new Set(
       hiddenEntries.map((entry) => entry.conversation_id)
@@ -71,14 +71,14 @@ export const getConversations = async (req, res, next) => {
     );
     const friendRequests = participantIds.length > 0
       ? await prisma.friendRequest.findMany({
-          where: {
-            OR: [
-              { sender_id: userId, receiver_id: { in: participantIds } },
-              { sender_id: { in: participantIds }, receiver_id: userId },
-            ],
-          },
-          select: { id: true, status: true, sender_id: true, receiver_id: true },
-        })
+        where: {
+          OR: [
+            { sender_id: userId, receiver_id: { in: participantIds } },
+            { sender_id: { in: participantIds }, receiver_id: userId },
+          ],
+        },
+        select: { id: true, status: true, sender_id: true, receiver_id: true },
+      })
       : [];
     const reqMap = {};
     for (const req of friendRequests) {
@@ -711,7 +711,7 @@ export const setNickname = async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { nickname } = req.body;
+    let { nickname } = req.body;
 
     // Validate conversation exists and user is participant
     const conversation = await prisma.conversation.findFirst({
@@ -728,6 +728,13 @@ export const setNickname = async (req, res, next) => {
       ? conversation.participant_2
       : conversation.participant_1;
 
+    // Sanitize nickname - convert null/undefined/empty string to null
+    if (nickname === null || nickname === undefined || (typeof nickname === 'string' && nickname.trim() === '')) {
+      nickname = null;
+    } else if (typeof nickname === 'string') {
+      nickname = nickname.trim();
+    }
+
     // Upsert contact with nickname
     const contact = await prisma.contact.upsert({
       where: {
@@ -739,10 +746,10 @@ export const setNickname = async (req, res, next) => {
       create: {
         owner_id: userId,
         contact_id: otherUserId,
-        nickname: nickname?.trim() || null,
+        nickname: nickname,
       },
       update: {
-        nickname: nickname?.trim() || null,
+        nickname: nickname,
       },
     });
 
