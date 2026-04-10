@@ -55,11 +55,11 @@ export const getConversations = async (req, res, next) => {
     const conversationIds = conversations.map((conv) => conv.id);
     const hiddenEntries = conversationIds.length > 0
       ? await ConversationVisibility.find({
-          user_id: userId,
-          conversation_id: { $in: conversationIds },
-        })
-          .select('conversation_id')
-          .lean()
+        user_id: userId,
+        conversation_id: { $in: conversationIds },
+      })
+        .select('conversation_id')
+        .lean()
       : [];
     const hiddenConversationIds = new Set(
       hiddenEntries.map((entry) => entry.conversation_id)
@@ -71,14 +71,14 @@ export const getConversations = async (req, res, next) => {
     );
     const friendRequests = participantIds.length > 0
       ? await prisma.friendRequest.findMany({
-          where: {
-            OR: [
-              { sender_id: userId, receiver_id: { in: participantIds } },
-              { sender_id: { in: participantIds }, receiver_id: userId },
-            ],
-          },
-          select: { id: true, status: true, sender_id: true, receiver_id: true },
-        })
+        where: {
+          OR: [
+            { sender_id: userId, receiver_id: { in: participantIds } },
+            { sender_id: { in: participantIds }, receiver_id: userId },
+          ],
+        },
+        select: { id: true, status: true, sender_id: true, receiver_id: true },
+      })
       : [];
     const reqMap = {};
     for (const req of friendRequests) {
@@ -701,6 +701,96 @@ export const searchMessages = async (req, res, next) => {
       .lean();
 
     return ApiResponse.ok('Search results', messages).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── SET/UPDATE NICKNAME ───────────────────────
+export const setNickname = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    let { nickname } = req.body;
+
+    // Validate conversation exists and user is participant
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id,
+        OR: [{ participant_1: userId }, { participant_2: userId }],
+      },
+    });
+
+    if (!conversation) throw ApiError.notFound('Conversation not found');
+
+    // Determine the other participant
+    const otherUserId = conversation.participant_1 === userId
+      ? conversation.participant_2
+      : conversation.participant_1;
+
+    // Sanitize nickname - convert null/undefined/empty string to null
+    if (nickname === null || nickname === undefined || (typeof nickname === 'string' && nickname.trim() === '')) {
+      nickname = null;
+    } else if (typeof nickname === 'string') {
+      nickname = nickname.trim();
+    }
+
+    // Upsert contact with nickname
+    const contact = await prisma.contact.upsert({
+      where: {
+        owner_id_contact_id: {
+          owner_id: userId,
+          contact_id: otherUserId,
+        },
+      },
+      create: {
+        owner_id: userId,
+        contact_id: otherUserId,
+        nickname: nickname,
+      },
+      update: {
+        nickname: nickname,
+      },
+    });
+
+    return ApiResponse.ok('Nickname updated', { nickname: contact.nickname }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── GET NICKNAME ──────────────────────────────
+export const getNickname = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Validate conversation exists and user is participant
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id,
+        OR: [{ participant_1: userId }, { participant_2: userId }],
+      },
+    });
+
+    if (!conversation) throw ApiError.notFound('Conversation not found');
+
+    // Determine the other participant
+    const otherUserId = conversation.participant_1 === userId
+      ? conversation.participant_2
+      : conversation.participant_1;
+
+    // Get contact
+    const contact = await prisma.contact.findUnique({
+      where: {
+        owner_id_contact_id: {
+          owner_id: userId,
+          contact_id: otherUserId,
+        },
+      },
+    });
+
+    return ApiResponse.ok('Nickname retrieved', { nickname: contact?.nickname || null }).send(res);
   } catch (err) {
     next(err);
   }

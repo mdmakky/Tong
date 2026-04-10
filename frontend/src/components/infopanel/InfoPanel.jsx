@@ -38,9 +38,13 @@ export default function InfoPanel() {
 function DirectInfo({ conversation, currentUser, presenceMap }) {
   const [blockLoading, setBlockLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
-  const { upsertConversation, removeConversation, setActiveConversation, togglePinConversation, pinnedConversations } = useChatStore()
+  const [nicknameLoading, setNicknameLoading] = useState(false)
+  const [editingNickname, setEditingNickname] = useState(false)
+  const [nicknameDraft, setNicknameDraft] = useState('')
+  const { upsertConversation, removeConversation, setActiveConversation, togglePinConversation, pinnedConversations, setNickname, nicknames } = useChatStore()
 
   const isPinned = pinnedConversations.includes(conversation.id)
+  const currentNickname = nicknames[conversation.id] || ''
 
   const other =
     conversation.other_user ||
@@ -52,6 +56,56 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
   const lastSeen = presence?.last_seen || other?.last_seen
 
   const isBlockedByMe = conversation.is_blocked && conversation.blocked_by === currentUser?.id
+
+  // Load nickname on mount
+  useEffect(() => {
+    const loadNickname = async () => {
+      try {
+        const { data } = await conversationApi.getNickname(conversation.id)
+        const nickname = data?.data?.nickname || ''
+        setNickname(conversation.id, nickname)
+      } catch (_) {
+        // Silently fail if not found
+      }
+    }
+    if (conversation?.id) {
+      loadNickname()
+    }
+  }, [conversation?.id, setNickname])
+
+  const handleSaveNickname = async () => {
+    setNicknameLoading(true)
+    try {
+      const newNickname = nicknameDraft.trim() || null
+      await conversationApi.setNickname(conversation.id, newNickname)
+      setNickname(conversation.id, newNickname)
+      setEditingNickname(false)
+      toast.success(newNickname ? 'Nickname saved' : 'Nickname cleared')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save nickname')
+    } finally {
+      setNicknameLoading(false)
+    }
+  }
+
+  const handleStartEdit = () => {
+    setNicknameDraft(currentNickname)
+    setEditingNickname(true)
+  }
+
+  const handleClearNickname = async () => {
+    setNicknameLoading(true)
+    try {
+      await conversationApi.setNickname(conversation.id, null)
+      setNickname(conversation.id, null)
+      setEditingNickname(false)
+      toast.success('Nickname cleared')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to clear nickname')
+    } finally {
+      setNicknameLoading(false)
+    }
+  }
 
   const handleBlock = async () => {
     if (!other?.id) return
@@ -104,8 +158,58 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
 
       {/* Avatar */}
       <Avatar src={other?.avatar_url} name={other?.display_name} size="xl" status={status} />
-      <h3 className="mt-3 text-lg font-semibold text-text-primary">{other?.display_name}</h3>
-      <p className="text-sm text-text-secondary">@{other?.username}</p>
+
+      {/* Nickname editing section */}
+      {editingNickname ? (
+        <div className="mt-3 w-full px-2">
+          <input
+            type="text"
+            value={nicknameDraft}
+            onChange={(e) => setNicknameDraft(e.target.value)}
+            placeholder="Enter nickname..."
+            className="w-full bg-bg-tertiary border border-border text-text-primary rounded-lg px-3 py-2 text-sm placeholder:text-text-muted focus:outline-none focus:border-accent-yellow/50"
+            autoFocus
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={handleSaveNickname}
+              disabled={nicknameLoading}
+              className="flex-1 px-3 py-1.5 bg-accent-yellow text-black text-sm rounded font-medium hover:bg-accent-yellow-dim transition-colors disabled:opacity-50"
+            >
+              {nicknameLoading ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={handleClearNickname}
+              disabled={nicknameLoading}
+              className="flex-1 px-3 py-1.5 bg-red-500/20 text-red-400 text-sm rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
+              title="Clear and delete nickname"
+            >
+              {nicknameLoading ? 'Clearing...' : 'Delete'}
+            </button>
+            <button
+              onClick={() => setEditingNickname(false)}
+              disabled={nicknameLoading}
+              className="flex-1 px-3 py-1.5 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {currentNickname ? (
+            <h3 className="mt-3 text-lg font-semibold text-accent-yellow">{currentNickname}</h3>
+          ) : null}
+          <h3 className="mt-1 text-lg font-semibold text-text-primary">{other?.display_name}</h3>
+          <p className="text-sm text-text-secondary">@{other?.username}</p>
+          <button
+            onClick={handleStartEdit}
+            className="mt-2 text-xs px-3 py-1 bg-bg-tertiary border border-border text-text-secondary rounded hover:bg-surface-hover transition-colors"
+          >
+            {currentNickname ? 'Edit nickname' : 'Add nickname'}
+          </button>
+        </>
+      )}
 
       {/* Status */}
       <p className="mt-1 text-xs text-text-muted">
