@@ -141,8 +141,11 @@ export default function useSocketEvents() {
 
     // ─── Message edited ───
     const onEdited = ({ message_id, conversation_id, new_content, is_edited, edited_at }) => {
+      const current = useChatStore.getState().messages[conversation_id]?.find(
+        (m) => (m._id || m.id) === message_id
+      )
       updateMessage(conversation_id, message_id, {
-        content: new_content,
+        content: { ...(current?.content || {}), ...new_content },
         is_edited: true,
         edited_at
       })

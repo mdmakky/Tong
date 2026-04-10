@@ -483,12 +483,6 @@ const chatHandler = (io, socket) => {
         return;
       }
 
-      const access = await resolveConversationAccess(
-        message.conversation_id,
-        message.conversation_type
-      );
-      if (!access) return;
-
       message.edit_history.push({ content: message.content?.text || '', edited_at: new Date() });
       message.content.text = text.trim();
       message.is_edited = true;
@@ -504,6 +498,7 @@ const chatHandler = (io, socket) => {
       });
     } catch (err) {
       console.error('edit_message error:', err.message);
+      socket.emit('edit_error', { message_id, error: 'Failed to edit message' });
     }
   });
 

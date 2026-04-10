@@ -33,6 +33,18 @@ export const editMessage = async (req, res, next) => {
     message.edited_at = new Date();
     await message.save();
 
+    // Broadcast to all conversation participants in real-time
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conv:${message.conversation_id}`).emit('message_edited', {
+        message_id: message._id,
+        conversation_id: message.conversation_id,
+        new_content: { text },
+        is_edited: true,
+        edited_at: message.edited_at,
+      });
+    }
+
     return ApiResponse.ok('Message edited', message).send(res);
   } catch (err) {
     next(err);
