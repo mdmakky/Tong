@@ -113,6 +113,7 @@ export const getGroups = async (req, res, next) => {
           nickname: m.nickname,
           muted_until: m.muted_until,
           last_message: lastMessage,
+          last_message_at: lastMessage?.created_at || m.group.updated_at,
           unread_count: unreadCount,
         };
       })
@@ -1090,6 +1091,12 @@ export const setMemberNickname = async (req, res, next) => {
     });
 
     await systemMessage.save();
+
+    // Update group's updated_at to reflect the new system message
+    await prisma.group.update({
+      where: { id },
+      data: { updated_at: new Date() },
+    });
 
     // Emit socket event to all group members
     const io = req.app.get('io');

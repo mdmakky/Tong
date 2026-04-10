@@ -147,6 +147,7 @@ export const getConversations = async (req, res, next) => {
           blocked_by: conv.blocked_by,
           other_user: otherUser,
           last_message: enrichedLastMessage,
+          last_message_at: enrichedLastMessage?.created_at || conv.updated_at,
           unread_count: unreadCount,
           request_status: friendReq?.status || null,
           request_id: friendReq?.id || null,
@@ -917,6 +918,12 @@ export const setSelfNickname = async (req, res, next) => {
     });
 
     await systemMessage.save();
+
+    // Update conversation's updated_at to reflect the new system message
+    await prisma.conversation.update({
+      where: { id },
+      data: { updated_at: new Date() },
+    });
 
     // Emit socket event to notify the other user
     const io = req.app.get('io');
