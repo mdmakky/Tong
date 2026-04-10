@@ -138,7 +138,7 @@ const initializeSocket = (io) => {
         const now = new Date();
         await prisma.user.update({
           where: { id: socket.user.id },
-          data: { last_seen: now },
+          data: { online_status: 'offline', last_seen: now },
         });
 
         // Broadcast offline status
