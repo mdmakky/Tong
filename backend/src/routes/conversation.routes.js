@@ -28,6 +28,8 @@ router.delete('/:id', convCtrl.deleteConversation);
 // ─── NICKNAME ──────────────────────────────────
 router.put('/:id/nickname', convCtrl.setNickname);
 router.get('/:id/nickname', convCtrl.getNickname);
+router.put('/:id/self-nickname', convCtrl.setSelfNickname);
+router.get('/:id/self-nickname', convCtrl.getSelfNickname);
 
 // ─── FRIEND REQUESTS ───────────────────────────
 router.post('/:id/accept-request', convCtrl.acceptFriendRequest);

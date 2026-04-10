@@ -35,7 +35,7 @@ export default function useSocketEvents() {
     const onNewMessage = (message) => {
       const convId = message.conversation_id
       appendMessage(convId, message)
-      
+
       // Skip unread increment for system messages
       if (message.message_type !== 'system') {
         incrementUnread(convId)

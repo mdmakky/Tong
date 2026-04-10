@@ -801,7 +801,7 @@ export const setNickname = async (req, res, next) => {
       });
     }
 
-    return ApiResponse.ok('Nickname updated', { 
+    return ApiResponse.ok('Nickname updated', {
       nickname: contact.nickname,
       systemMessage: systemMessage,
     }).send(res);
@@ -842,6 +842,98 @@ export const getNickname = async (req, res, next) => {
     });
 
     return ApiResponse.ok('Nickname retrieved', { nickname: contact?.nickname || null }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── SET SELF NICKNAME ─────────────────────────
+export const setSelfNickname = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    let { self_nickname } = req.body;
+
+    // Validate conversation exists and user is participant
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id,
+        OR: [{ participant_1: userId }, { participant_2: userId }],
+      },
+    });
+
+    if (!conversation) throw ApiError.notFound('Conversation not found');
+
+    // Determine the other participant
+    const otherUserId = conversation.participant_1 === userId
+      ? conversation.participant_2
+      : conversation.participant_1;
+
+    // Sanitize self_nickname - convert null/undefined/empty string to null
+    if (self_nickname === null || self_nickname === undefined || (typeof self_nickname === 'string' && self_nickname.trim() === '')) {
+      self_nickname = null;
+    } else if (typeof self_nickname === 'string') {
+      self_nickname = self_nickname.trim();
+    }
+
+    // Upsert contact with self_nickname
+    const contact = await prisma.contact.upsert({
+      where: {
+        owner_id_contact_id: {
+          owner_id: userId,
+          contact_id: otherUserId,
+        },
+      },
+      create: {
+        owner_id: userId,
+        contact_id: otherUserId,
+        self_nickname: self_nickname,
+      },
+      update: {
+        self_nickname: self_nickname,
+      },
+    });
+
+    return ApiResponse.ok('Self nickname updated', {
+      self_nickname: contact.self_nickname,
+    }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── GET SELF NICKNAME ─────────────────────────
+export const getSelfNickname = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    // Validate conversation exists and user is participant
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        id,
+        OR: [{ participant_1: userId }, { participant_2: userId }],
+      },
+    });
+
+    if (!conversation) throw ApiError.notFound('Conversation not found');
+
+    // Determine the other participant
+    const otherUserId = conversation.participant_1 === userId
+      ? conversation.participant_2
+      : conversation.participant_1;
+
+    // Get contact
+    const contact = await prisma.contact.findUnique({
+      where: {
+        owner_id_contact_id: {
+          owner_id: userId,
+          contact_id: otherUserId,
+        },
+      },
+    });
+
+    return ApiResponse.ok('Self nickname retrieved', { self_nickname: contact?.self_nickname || null }).send(res);
   } catch (err) {
     next(err);
   }

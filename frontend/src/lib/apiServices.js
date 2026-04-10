@@ -42,6 +42,8 @@ export const conversationApi = {
   declineRequest: (id) => api.post(`/conversations/${id}/decline-request`),
   setNickname: (id, nickname) => api.put(`/conversations/${id}/nickname`, { nickname }),
   getNickname: (id) => api.get(`/conversations/${id}/nickname`),
+  setSelfNickname: (id, self_nickname) => api.put(`/conversations/${id}/self-nickname`, { self_nickname }),
+  getSelfNickname: (id) => api.get(`/conversations/${id}/self-nickname`),
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
