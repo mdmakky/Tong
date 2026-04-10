@@ -13,6 +13,40 @@ import { groupMessagesByDate } from '@/utils/helpers'
 import { ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 
+const CHAT_CACHE_TTL_MS = 10 * 60 * 1000
+
+const getChatCacheKey = (type, convId) => `chat-cache:${type || 'direct'}:${convId}`
+
+const readChatCache = (type, convId) => {
+  if (!convId || typeof window === 'undefined') return null
+  try {
+    const raw = sessionStorage.getItem(getChatCacheKey(type, convId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed?.messages) || typeof parsed?.savedAt !== 'number') return null
+    if (Date.now() - parsed.savedAt > CHAT_CACHE_TTL_MS) return null
+    return parsed
+  } catch (_) {
+    return null
+  }
+}
+
+const writeChatCache = (type, convId, messages, hasMore) => {
+  if (!convId || typeof window === 'undefined') return
+  try {
+    sessionStorage.setItem(
+      getChatCacheKey(type, convId),
+      JSON.stringify({
+        messages: messages || [],
+        hasMore: !!hasMore,
+        savedAt: Date.now(),
+      })
+    )
+  } catch (_) {
+    // Ignore quota/storage failures.
+  }
+}
+
 export default function ChatWindow() {
   const {
     activeConversation,
@@ -37,16 +71,26 @@ export default function ChatWindow() {
   const [atBottom, setAtBottom] = useState(true)
   const [firstItemIndex, setFirstItemIndex] = useState(1000)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const [initialScrollDone, setInitialScrollDone] = useState(false)
 
   const convMessages = messages[convId] || []
 
   // Effect 1: fetch messages when conversation changes (skips if already cached)
   useEffect(() => {
     if (!convId) return
+    setInitialScrollDone(false)
     if (messages[convId]?.length > 0) return // already cached — Effect 2 handles join
 
+    const cached = readChatCache(activeType, convId)
+    if (cached) {
+      setMessages(convId, cached.messages)
+      setHasMore(convId, !!cached.hasMore)
+      setFirstItemIndex(Math.max(0, 1000 - cached.messages.length))
+    }
+
     const fetchMessages = async () => {
-      setLoadingMessages(convId, true)
+      // If cache exists, avoid loader flicker and refresh in background.
+      if (!cached) setLoadingMessages(convId, true)
       try {
         const api = activeType === 'group' ? groupApi : conversationApi
         const { data } = await api.getMessages(convId, { limit: 50, offset: 0 })
@@ -54,15 +98,16 @@ export default function ChatWindow() {
         setMessages(convId, msgs)
         setHasMore(convId, msgs.length === 50)
         setFirstItemIndex(Math.max(0, 1000 - msgs.length))
+        writeChatCache(activeType, convId, msgs, msgs.length === 50)
       } catch (err) {
         console.error('Failed to fetch messages', err)
       } finally {
-        setLoadingMessages(convId, false)
+        if (!cached) setLoadingMessages(convId, false)
       }
     }
 
     fetchMessages()
-  }, [convId])
+  }, [convId, activeType])
 
   // Effect 2: join socket room + mark read whenever convId OR socket changes.
   // We never emit leave_conversation — the backend keeps us in all rooms so
@@ -92,10 +137,15 @@ export default function ChatWindow() {
       })
       const older = data.data?.messages || data.data || []
       if (older.length > 0) {
+        const merged = [...older, ...convMessages]
         setMessages(convId, older, true) // prepend
         setFirstItemIndex((prev) => prev - older.length)
+        writeChatCache(activeType, convId, merged, true)
       }
-      if (older.length < 50) setHasMore(convId, false)
+      if (older.length < 50) {
+        setHasMore(convId, false)
+        writeChatCache(activeType, convId, older.length > 0 ? [...older, ...convMessages] : convMessages, false)
+      }
     } catch (err) {
       console.error('Failed to load older messages', err)
     } finally {
@@ -120,6 +170,27 @@ export default function ChatWindow() {
   const typingNames = (typingUsers[convId] || [])
     .filter((u) => u.user_id !== user?.id)
     .map((u) => u.display_name)
+
+  // Persist latest in-memory list to browser session cache.
+  useEffect(() => {
+    if (!convId) return
+    if (!convMessages.length) return
+    writeChatCache(activeType, convId, convMessages, !!hasMore[convId])
+  }, [convId, activeType, convMessages, hasMore])
+
+  // For long conversations, jump straight to bottom once messages are ready.
+  useEffect(() => {
+    if (!convId || !grouped.length || initialScrollDone) return
+    const raf1 = requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
+      const raf2 = requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'auto' })
+        setInitialScrollDone(true)
+      })
+      return () => cancelAnimationFrame(raf2)
+    })
+    return () => cancelAnimationFrame(raf1)
+  }, [convId, grouped.length, initialScrollDone])
 
   const scrollToBottom = () => {
     virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' })
@@ -148,7 +219,7 @@ export default function ChatWindow() {
           startReached={loadOlderMessages}
           atBottomStateChange={setAtBottom}
           atBottomThreshold={120}
-          followOutput="smooth"
+          followOutput={atBottom ? 'auto' : false}
           itemContent={(index, item) => {
             if (item.type === 'separator') {
               return <DateSeparator key={item.key} date={item.date} />
