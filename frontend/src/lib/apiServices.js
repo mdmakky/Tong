@@ -40,6 +40,8 @@ export const conversationApi = {
   getMedia: (id) => api.get(`/conversations/${id}/media`),
   acceptRequest: (id) => api.post(`/conversations/${id}/accept-request`),
   declineRequest: (id) => api.post(`/conversations/${id}/decline-request`),
+  setNickname: (id, nickname) => api.put(`/conversations/${id}/nickname`, { nickname }),
+  getNickname: (id) => api.get(`/conversations/${id}/nickname`),
 }
 
 // ─── Messages ─────────────────────────────────────────────────────────────────

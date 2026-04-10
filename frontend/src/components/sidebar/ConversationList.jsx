@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, X, Pin, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
@@ -12,6 +12,7 @@ import { formatConvTime, truncate } from '@/utils/helpers'
 export default function ConversationList() {
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState(null)
+  const [nicknames, setNicknamesMap] = useState({}) // Store nicknames by conversation ID
   const {
     conversations,
     activeConversation,
@@ -23,11 +24,56 @@ export default function ConversationList() {
   } = useChatStore()
   const { user } = useAuthStore()
 
+  // Load all nicknames when conversations change
+  useEffect(() => {
+    const loadNicknames = async () => {
+      try {
+        const nicknameMap = {}
+        for (const conv of conversations) {
+          try {
+            const { data } = await conversationApi.getNickname(conv.id)
+            const nickname = data?.data?.nickname
+            if (nickname) {
+              nicknameMap[conv.id] = nickname
+            }
+          } catch (_) {
+            // Silently fail for each one
+          }
+        }
+        setNicknamesMap(nicknameMap)
+      } catch (_) {
+        // Error loading nicknames
+      }
+    }
+    if (conversations.length > 0) {
+      loadNicknames()
+    }
+  }, [conversations.length])
+
+  // Reload the active conversation's nickname to get fresh data from the InfoPanel
+  useEffect(() => {
+    if (!activeConversation?.id) return
+    const loadActiveNickname = async () => {
+      try {
+        const { data } = await conversationApi.getNickname(activeConversation.id)
+        const nickname = data?.data?.nickname
+        setNicknamesMap((prev) => ({
+          ...prev,
+          [activeConversation.id]: nickname || undefined,
+        }))
+      } catch (_) {
+        // Silently fail
+      }
+    }
+    loadActiveNickname()
+  }, [activeConversation?.id])
+
   const filtered = conversations
     .filter((conv) => {
       if (!search) return true
       const other = getOtherParticipant(conv, user?.id)
-      return other?.display_name?.toLowerCase().includes(search.toLowerCase())
+      const displayName = nicknames[conv.id] || other?.display_name
+      return displayName?.toLowerCase().includes(search.toLowerCase())
     })
     .sort((a, b) => {
       const aPinned = pinnedConversations.includes(a.id)
@@ -115,6 +161,8 @@ export default function ConversationList() {
           const isActive = activeConversation?.id === conv.id
           const isDeleting = deletingId === conv.id
           const isPinned = pinnedConversations.includes(conv.id)
+          const nickname = nicknames[conv.id]
+          const displayName = nickname || other?.display_name || 'Unknown'
 
           return (
             <div
@@ -140,7 +188,7 @@ export default function ConversationList() {
                       'text-sm truncate',
                       unread > 0 ? 'font-bold text-text-primary' : 'font-medium text-text-primary'
                     )}>
-                      {other?.display_name || 'Unknown'}
+                      {displayName}
                     </span>
                     <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                       {isPinned && <Pin className="w-3 h-3 text-accent-yellow" />}
@@ -177,7 +225,7 @@ export default function ConversationList() {
 
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id, other?.display_name) }}
+                onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id, displayName) }}
                 disabled={isDeleting}
                 className={clsx(
                   'p-2 rounded-lg text-text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors flex-shrink-0',
