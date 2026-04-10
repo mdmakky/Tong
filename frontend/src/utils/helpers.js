@@ -44,6 +44,28 @@ export function formatLastSeen(date) {
 }
 
 /**
+ * Resolve the effective presence status shown in UI.
+ * Live socket status has priority; profile fallback never treats plain "online" as authoritative.
+ */
+export function resolvePresenceStatus(liveStatus, profileStatus) {
+  const normalize = (status) => {
+    if (status === 'invisible') return 'offline'
+    if (status === 'online' || status === 'away' || status === 'busy' || status === 'offline') {
+      return status
+    }
+    return null
+  }
+
+  const live = normalize(liveStatus)
+  if (live) return live
+
+  // Keep meaningful custom states from profile, but do not trust stale "online" values.
+  if (profileStatus === 'away' || profileStatus === 'busy') return profileStatus
+  if (profileStatus === 'invisible') return 'offline'
+  return 'offline'
+}
+
+/**
  * Get initials from a display name
  */
 export function getInitials(name = '') {

@@ -2,7 +2,7 @@ import { Phone, Video, Search, MoreVertical, ChevronRight, ArrowLeft, Pin } from
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import Avatar from '@/components/ui/Avatar'
-import { formatLastSeen } from '@/utils/helpers'
+import { formatLastSeen, resolvePresenceStatus } from '@/utils/helpers'
 
 export default function ChatHeader() {
   const { activeConversation, activeType, presenceMap, typingUsers, toggleInfoPanel, showInfoPanel, setActiveConversation, pinnedConversations, pinnedGroups, togglePinConversation, togglePinGroup, nicknames } = useChatStore()
@@ -34,15 +34,16 @@ export default function ChatHeader() {
     displayName = nickname || other?.display_name || 'User'
     avatarUrl = other?.avatar_url
     const presence = other ? presenceMap[other.id] : null
-    status = presence?.status || other?.online_status || 'offline'
+    const lastSeen = presence?.last_seen || other?.last_seen
+    status = resolvePresenceStatus(presence?.status, other?.online_status)
 
     const typingList = (typingUsers[convId] || []).filter((u) => u.user_id !== user?.id)
     if (typingList.length > 0) {
       subtitle = 'typing...'
     } else if (status === 'online') {
       subtitle = 'Online'
-    } else if (other?.last_seen) {
-      subtitle = `Last seen ${formatLastSeen(other.last_seen)}`
+    } else if (lastSeen) {
+      subtitle = `Last seen ${formatLastSeen(lastSeen)}`
     } else {
       subtitle = 'Offline'
     }

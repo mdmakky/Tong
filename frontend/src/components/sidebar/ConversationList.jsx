@@ -7,7 +7,7 @@ import useAuthStore from '@/store/authStore'
 import Avatar from '@/components/ui/Avatar'
 import Badge from '@/components/ui/Badge'
 import { conversationApi } from '@/lib/apiServices'
-import { formatConvTime, truncate } from '@/utils/helpers'
+import { formatConvTime, truncate, resolvePresenceStatus } from '@/utils/helpers'
 
 export default function ConversationList() {
   const [search, setSearch] = useState('')
@@ -157,7 +157,7 @@ export default function ConversationList() {
         {filtered.map((conv) => {
           const other = getOtherParticipant(conv, user?.id)
           const presence = other ? presenceMap[other.id] : null
-          const status = presence?.status || (other?.online_status ?? 'offline')
+          const status = resolvePresenceStatus(presence?.status, other?.online_status)
           const unread = unreadCounts[conv.id] || 0
           const isActive = activeConversation?.id === conv.id
           const isDeleting = deletingId === conv.id

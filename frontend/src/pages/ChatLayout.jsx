@@ -12,7 +12,16 @@ import EmptyChatState from '@/components/chat/EmptyChatState'
 import useSeo from '@/hooks/useSeo'
 
 export default function ChatLayout() {
-  const { activeConversation, showInfoPanel, toggleInfoPanel, setConversations, setGroups } = useChatStore()
+  const {
+    activeConversation,
+    showInfoPanel,
+    toggleInfoPanel,
+    setConversations,
+    setGroups,
+    socket,
+    updatePresence,
+  } = useChatStore()
+  const { user } = useAuthStore()
 
   useSeo({
     title: 'App',
@@ -43,6 +52,28 @@ export default function ChatLayout() {
   useEffect(() => {
     if (groupsData) setGroups(groupsData)
   }, [groupsData])
+
+  useEffect(() => {
+    if (!socket || !user?.id || !Array.isArray(convsData) || convsData.length === 0) return
+
+    const userIds = [...new Set(
+      convsData
+        .map((conv) => conv?.other_user?.id)
+        .filter(Boolean)
+    )]
+
+    if (userIds.length === 0) return
+
+    socket.emit('get_presence', { user_ids: userIds }, (payload) => {
+      const presence = payload?.presence
+      if (!presence || typeof presence !== 'object') return
+
+      Object.entries(presence).forEach(([targetUserId, meta]) => {
+        if (!meta) return
+        updatePresence(targetUserId, meta.status, meta.last_seen)
+      })
+    })
+  }, [socket, user?.id, convsData, updatePresence])
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-bg-primary">

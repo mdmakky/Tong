@@ -12,7 +12,7 @@ import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
 import Avatar from '@/components/ui/Avatar'
 import { groupApi, conversationApi, userApi } from '@/lib/apiServices'
-import { formatLastSeen } from '@/utils/helpers'
+import { formatLastSeen, resolvePresenceStatus } from '@/utils/helpers'
 
 export default function InfoPanel() {
   const { activeConversation, activeType, presenceMap } = useChatStore()
@@ -50,7 +50,7 @@ function DirectInfo({ conversation, currentUser, presenceMap }) {
     null
 
   const presence = other ? presenceMap[other?.id] : null
-  const status = presence?.status || other?.online_status || 'offline'
+  const status = resolvePresenceStatus(presence?.status, other?.online_status)
   const lastSeen = presence?.last_seen || other?.last_seen
 
   const isBlockedByMe = conversation.is_blocked && conversation.blocked_by === currentUser?.id
