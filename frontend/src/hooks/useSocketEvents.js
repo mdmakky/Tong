@@ -268,6 +268,26 @@ export default function useSocketEvents() {
         .catch(() => { })
     }
 
+    const onMemberNicknameUpdated = ({ group_id, target_user_id, nickname, updated_by, target_user, message }) => {
+      if (!group_id || !target_user_id) return
+
+      // Update the store with the new nickname
+      const store = useChatStore.getState()
+      store.setGroupMemberNickname(group_id, target_user_id, nickname)
+
+      // Append the system message from backend (already persisted)
+      if (message) {
+        appendMessage(group_id, message)
+
+        // Update group last message in sidebar
+        upsertGroup({
+          id: group_id,
+          last_message: message,
+          last_message_at: message.created_at,
+        })
+      }
+    }
+
     const onRemovedFromGroup = ({ group_id }) => {
       if (!group_id) return
       removeGroup(group_id)
@@ -296,6 +316,7 @@ export default function useSocketEvents() {
     socket.on('member_joined', onMemberJoined)
     socket.on('member_left', onMemberLeft)
     socket.on('member_role_updated', onMemberRoleUpdated)
+    socket.on('member_nickname_updated', onMemberNicknameUpdated)
     socket.on('removed_from_group', onRemovedFromGroup)
     socket.on('group_deleted', onGroupDeleted)
 
@@ -318,6 +339,7 @@ export default function useSocketEvents() {
       socket.off('member_joined', onMemberJoined)
       socket.off('member_left', onMemberLeft)
       socket.off('member_role_updated', onMemberRoleUpdated)
+      socket.off('member_nickname_updated', onMemberNicknameUpdated)
       socket.off('removed_from_group', onRemovedFromGroup)
       socket.off('group_deleted', onGroupDeleted)
     }

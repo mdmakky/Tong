@@ -71,6 +71,8 @@ export const groupApi = {
     api.put(`/groups/${id}/members/${userId}/role`, { role }),
   muteMember: (id, userId, duration) =>
     api.post(`/groups/${id}/members/${userId}/mute`, { duration }),
+  setMemberNickname: (id, nickname, memberId) => api.put(`/groups/${id}/members/${memberId}/nickname`, { nickname }),
+  getMemberNickname: (id, memberId) => api.get(`/groups/${id}/members/${memberId}/nickname`),
   join: (inviteLink) => api.post(`/groups/join/${inviteLink}`),
   joinPublic: (id) => api.post(`/groups/${id}/join`),
   leave: (id) => api.post(`/groups/${id}/leave`),

@@ -28,6 +28,7 @@ export default function ChatWindow() {
     removeConversation,
     upsertConversation,
     socket,
+    setGroupMemberNickname,
   } = useChatStore()
 
   const { user } = useAuthStore()
@@ -79,6 +80,37 @@ export default function ChatWindow() {
     })
     clearUnread(convId)
   }, [convId, socket, activeType])
+
+  // Effect 3: Load group member nicknames when group opens
+  useEffect(() => {
+    if (!convId || activeType !== 'group') return
+
+    const loadGroupNicknames = async () => {
+      try {
+        const { data } = await groupApi.getMembers(convId)
+        const members = data?.data || []
+
+        // Load nicknames for each member
+        await Promise.all(
+          members.map(async (member) => {
+            try {
+              const { data: nicknameData } = await groupApi.getMemberNickname(convId, member.user_id)
+              const nickname = nicknameData?.data?.nickname
+              if (nickname) {
+                setGroupMemberNickname(convId, member.user_id, nickname)
+              }
+            } catch (_) {
+              // Silently fail if nickname not found
+            }
+          })
+        )
+      } catch (err) {
+        console.error('Failed to load group nicknames:', err)
+      }
+    }
+
+    loadGroupNicknames()
+  }, [convId, activeType, setGroupMemberNickname])
 
   const loadOlderMessages = useCallback(async () => {
     if (!hasMore[convId] || loadingOlder) return

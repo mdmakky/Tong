@@ -398,6 +398,7 @@ function GroupInfo({ conversation, currentUser }) {
   const [savingGroup, setSavingGroup] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
+  const [showNicknamesModal, setShowNicknamesModal] = useState(false)
   const [memberSearch, setMemberSearch] = useState('')
   const [busyAction, setBusyAction] = useState('')
   const [muteDurations, setMuteDurations] = useState({})
@@ -691,6 +692,15 @@ function GroupInfo({ conversation, currentUser }) {
         {group.description && (
           <p className="mt-2 text-sm text-text-secondary text-center px-2">{group.description}</p>
         )}
+
+        {/* Nicknames button */}
+        <button
+          onClick={() => setShowNicknamesModal(true)}
+          className="mt-4 w-full px-4 py-2 bg-bg-tertiary border border-border text-text-primary rounded-lg hover:bg-surface-hover transition-colors flex items-center justify-center gap-2"
+        >
+          <UserCog size={18} />
+          <span className="text-sm font-medium">Nicknames</span>
+        </button>
       </div>
 
       {canManageGroup && (
@@ -886,6 +896,190 @@ function GroupInfo({ conversation, currentUser }) {
             disabled={deleting || leaving}
           />
         )}
+      </div>
+
+      {/* Group Nicknames Modal */}
+      {showNicknamesModal && (
+        <GroupNicknamesModal
+          group={conversation}
+          currentUser={currentUser}
+          onClose={() => setShowNicknamesModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Group Nicknames Modal ─────────────────────────────────────────────────────
+function GroupNicknamesModal({ group, currentUser, onClose }) {
+  const [members, setMembers] = useState([])
+  const [membersLoading, setMembersLoading] = useState(true)
+  const [editingMemberId, setEditingMemberId] = useState(null)
+  const [nicknameDraft, setNicknameDraft] = useState('')
+  const [nicknameLoading, setNicknameLoading] = useState(false)
+  const { getGroupMemberNickname } = useChatStore()
+
+  // Load group members and their nicknames on mount
+  useEffect(() => {
+    const loadGroupMembers = async () => {
+      try {
+        const { data } = await groupApi.getMembers(group.id)
+        const membersData = data?.data || []
+
+        // Load nicknames for each member from store or API
+        const membersWithNicknames = membersData.map((member) => {
+          const storeNickname = getGroupMemberNickname(group.id, member.user_id)
+          return { ...member, nickname: storeNickname || '' }
+        })
+
+        setMembers(membersWithNicknames)
+      } catch (err) {
+        console.error('Failed to load group members:', err)
+      } finally {
+        setMembersLoading(false)
+      }
+    }
+
+    if (group?.id) {
+      loadGroupMembers()
+    }
+  }, [group?.id, getGroupMemberNickname])
+
+  const handleStartEdit = (member) => {
+    setEditingMemberId(member.user_id)
+    setNicknameDraft(member.nickname || '')
+  }
+
+  const handleSaveNickname = async (memberId) => {
+    setNicknameLoading(true)
+    try {
+      const newNickname = nicknameDraft.trim() || null
+      await groupApi.setMemberNickname(group.id, newNickname, memberId)
+
+      setMembers(members.map(m =>
+        m.user_id === memberId ? { ...m, nickname: newNickname } : m
+      ))
+      setEditingMemberId(null)
+      toast.success(newNickname ? 'Nickname saved' : 'Nickname cleared')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save nickname')
+    } finally {
+      setNicknameLoading(false)
+    }
+  }
+
+  const handleClearNickname = async (memberId) => {
+    setNicknameLoading(true)
+    try {
+      await groupApi.setMemberNickname(group.id, null, memberId)
+
+      setMembers(members.map(m =>
+        m.user_id === memberId ? { ...m, nickname: '' } : m
+      ))
+      setEditingMemberId(null)
+      toast.success('Nickname cleared')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to clear nickname')
+    } finally {
+      setNicknameLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-bg-secondary border border-border rounded-lg shadow-lg max-w-sm w-11/12 max-h-96 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-text-primary">Nicknames</h2>
+          <button
+            onClick={onClose}
+            className="text-text-secondary hover:text-text-primary transition-colors"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {membersLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-accent-yellow/30 border-t-accent-yellow rounded-full animate-spin" />
+            </div>
+          ) : editingMemberId ? (
+            <div className="space-y-3">
+              <p className="text-sm text-text-secondary mb-3">Set nickname for this member</p>
+              <input
+                type="text"
+                value={nicknameDraft}
+                onChange={(e) => setNicknameDraft(e.target.value)}
+                placeholder="Enter nickname..."
+                className="w-full bg-bg-tertiary border border-border text-text-primary rounded-lg px-3 py-2 text-sm placeholder:text-text-muted focus:outline-none focus:border-accent-yellow/50"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleSaveNickname(editingMemberId)}
+                  disabled={nicknameLoading}
+                  className="flex-1 px-3 py-2 bg-accent-yellow text-black text-sm rounded font-medium hover:bg-accent-yellow-dim transition-colors disabled:opacity-50"
+                >
+                  {nicknameLoading ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => handleClearNickname(editingMemberId)}
+                  disabled={nicknameLoading}
+                  className="flex-1 px-3 py-2 bg-red-500/20 text-red-400 text-sm rounded hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                >
+                  {nicknameLoading ? 'Clearing...' : 'Delete'}
+                </button>
+                <button
+                  onClick={() => setEditingMemberId(null)}
+                  disabled={nicknameLoading}
+                  className="flex-1 px-3 py-2 bg-surface-hover text-text-secondary text-sm rounded hover:bg-border transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {members.map(member => (
+                <div key={member.user_id} className="flex items-center justify-between p-3 bg-bg-tertiary rounded-lg hover:bg-surface-hover transition-colors">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <Avatar src={member.user?.avatar_url} name={member.user?.display_name} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-accent-yellow truncate">
+                          {member.nickname || member.user?.display_name}
+                        </p>
+                        {member.nickname && (
+                          <p className="text-xs text-text-muted truncate">({member.user?.display_name})</p>
+                        )}
+                      </div>
+                      <p className="text-xs text-text-secondary truncate">@{member.user?.username}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleStartEdit(member)}
+                    className="p-1 hover:bg-surface-hover rounded transition-colors flex-shrink-0 ml-2"
+                    title="Edit nickname"
+                  >
+                    <UserCog size={18} className="text-text-secondary hover:text-accent-yellow" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t border-border p-4">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 bg-bg-tertiary border border-border text-text-primary rounded-lg hover:bg-surface-hover transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   )

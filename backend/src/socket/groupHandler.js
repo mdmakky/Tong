@@ -110,6 +110,33 @@ const groupHandler = (io, socket) => {
     }
   });
 
+  // ─── Member nickname updated ─────────────────
+  socket.on('member_nickname_updated', async ({ group_id, target_user_id, nickname }) => {
+    try {
+      // Verify sender is a member of the group
+      const membership = await getMembership(group_id);
+      if (!membership) return;
+
+      const targetUser = await prisma.user.findUnique({
+        where: { id: target_user_id },
+        select: { id: true, username: true, display_name: true, avatar_url: true },
+      });
+
+      if (targetUser) {
+        // Emit to all members in the group
+        io.to(`conv:${group_id}`).emit('member_nickname_updated', {
+          group_id,
+          target_user_id,
+          nickname,
+          updated_by: userId,
+          target_user: targetUser,
+        });
+      }
+    } catch (err) {
+      console.error('member_nickname_updated error:', err.message);
+    }
+  });
+
   // ─── Auto-join all user's groups on connect ──
   const joinUserGroups = async () => {
     try {

@@ -24,7 +24,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
   const [editMode, setEditMode] = useState(false)
   const [editText, setEditText] = useState(message.content?.text || '')
   const [actionsLocked, setActionsLocked] = useState(false)
-  const { setReplyTo, updateMessage, deleteMessage } = useChatStore()
+  const { setReplyTo, updateMessage, deleteMessage, getGroupMemberNickname, activeType, activeConversation } = useChatStore()
   const { user } = useAuthStore()
   const socket = getSocket()
 
@@ -60,6 +60,16 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
   )
 
   const sender = msg.sender || (isOwn ? null : msg)
+
+  // Get display name: use nickname if available, fallback to real name
+  const getDisplayName = () => {
+    if (!sender) return ''
+    if (activeType === 'group' && activeConversation?.id === conversationId) {
+      const nickname = getGroupMemberNickname(conversationId, sender.id)
+      if (nickname) return nickname
+    }
+    return sender.display_name || sender.username
+  }
 
   // Status icon
   const StatusIcon = () => {
@@ -223,7 +233,7 @@ export default function MessageItem({ message, isOwn, conversationId, previousMe
         {/* Sender name for group chats */}
         {showAvatar && !isOwn && sender?.display_name && (
           <span className="text-xs font-medium text-accent-yellow mb-1 ml-3">
-            {sender.display_name}
+            {getDisplayName()}
           </span>
         )}
 
@@ -498,7 +508,7 @@ function AudioMessageContent({ content }) {
     if (!audio) return
 
     if (audio.paused) {
-      audio.play().catch(() => {})
+      audio.play().catch(() => { })
     } else {
       audio.pause()
     }

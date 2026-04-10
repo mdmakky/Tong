@@ -59,6 +59,10 @@ router.post(
   groupCtrl.muteMember
 );
 
+// ─── MEMBER NICKNAME ───────────────────────────
+router.put('/:id/members/:uid/nickname', groupCtrl.setMemberNickname);
+router.get('/:id/members/:uid/nickname', groupCtrl.getMemberNickname);
+
 // ─── INVITE / JOIN / LEAVE ─────────────────────
 router.post('/join/:invite_link', groupCtrl.joinByInvite);
 router.post('/:id/join', groupCtrl.joinPublicGroup);

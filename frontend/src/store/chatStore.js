@@ -75,6 +75,9 @@ const useChatStore = create((set, get) => ({
   // Nicknames (one-on-one chats)
   nicknames: {}, // { convId: nickname }
 
+  // Group member nicknames
+  groupNicknames: {}, // { groupId: { userId: nickname } }
+
   // Socket instance (stored here so React can react to changes)
   socket: null,
 
@@ -401,6 +404,32 @@ const useChatStore = create((set, get) => ({
 
   setNicknames: (nicknamesMap) => {
     set({ nicknames: nicknamesMap })
+  },
+
+  setGroupMemberNickname: (groupId, userId, nickname) => {
+    set((state) => ({
+      groupNicknames: {
+        ...state.groupNicknames,
+        [groupId]: {
+          ...state.groupNicknames[groupId],
+          [userId]: nickname || null,
+        },
+      },
+    }))
+  },
+
+  getGroupMemberNickname: (groupId, userId) => {
+    const state = get()
+    return state.groupNicknames[groupId]?.[userId] || null
+  },
+
+  setGroupNicknames: (groupId, nicknamesMap) => {
+    set((state) => ({
+      groupNicknames: {
+        ...state.groupNicknames,
+        [groupId]: nicknamesMap,
+      },
+    }))
   },
 }))
 

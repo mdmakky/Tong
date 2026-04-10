@@ -1026,3 +1026,126 @@ export const muteMember = async (req, res, next) => {
     next(err);
   }
 };
+
+// ─── SET MEMBER NICKNAME (own nickname in group) ────
+export const setMemberNickname = async (req, res, next) => {
+  try {
+    const { id, uid } = req.params;
+    const currentUserId = req.user.id;
+    let { nickname } = req.body;
+
+    // Validate current user is member of the group
+    const currentMember = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: id, user_id: currentUserId } },
+    });
+
+    if (!currentMember) throw ApiError.notFound('You are not a member of this group');
+
+    // Validate target member exists in the group
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: id, user_id: uid } },
+    });
+
+    if (!member) throw ApiError.notFound('User is not a member of this group');
+
+    // Sanitize nickname - convert null/undefined/empty string to null
+    if (nickname === null || nickname === undefined || (typeof nickname === 'string' && nickname.trim() === '')) {
+      nickname = null;
+    } else if (typeof nickname === 'string') {
+      nickname = nickname.trim();
+    }
+
+    // Update member nickname
+    const updatedMember = await prisma.groupMember.update({
+      where: { group_id_user_id: { group_id: id, user_id: uid } },
+      data: { nickname },
+    });
+
+    // Get target user info for socket event
+    const targetUser = await prisma.user.findUnique({
+      where: { id: uid },
+      select: { id: true, username: true, display_name: true, avatar_url: true },
+    });
+
+    // Get current user info for system message
+    const currentUser = await prisma.user.findUnique({
+      where: { id: currentUserId },
+      select: { id: true, username: true, display_name: true, avatar_url: true },
+    });
+
+    // Create system message for nickname change
+    // Format: "[User who changed] set nickname for [User whose nickname] to [Nickname]"
+    const systemText = nickname
+      ? `${currentUser.display_name} set nickname for ${targetUser.display_name} to ${nickname}`
+      : `${currentUser.display_name} cleared nickname for ${targetUser.display_name}`;
+
+    const systemMessage = new Message({
+      conversation_id: id,
+      conversation_type: 'group',
+      sender_id: currentUserId,
+      sender: currentUser,
+      message_type: 'system',
+      content: { text: systemText },
+      status: 'delivered',
+    });
+
+    await systemMessage.save();
+
+    // Emit socket event to all group members
+    const io = req.app.get('io');
+    if (io && targetUser) {
+      io.to(`conv:${id}`).emit('member_nickname_updated', {
+        group_id: id,
+        target_user_id: uid,
+        nickname: updatedMember.nickname,
+        updated_by: currentUserId,
+        target_user: targetUser,
+        message: {
+          _id: systemMessage._id,
+          conversation_id: id,
+          conversation_type: 'group',
+          sender_id: currentUserId,
+          sender: systemMessage.sender,
+          message_type: 'system',
+          content: systemMessage.content,
+          created_at: systemMessage.created_at,
+          status: 'delivered',
+        },
+      });
+    }
+
+    return ApiResponse.ok('Member nickname updated', {
+      nickname: updatedMember.nickname,
+    }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── GET MEMBER NICKNAME ───────────────────────
+export const getMemberNickname = async (req, res, next) => {
+  try {
+    const { id, uid } = req.params;
+    const currentUserId = req.user.id;
+
+    // Validate current user is member of the group
+    const currentMember = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: id, user_id: currentUserId } },
+    });
+
+    if (!currentMember) throw ApiError.notFound('You are not a member of this group');
+
+    // Get target member
+    const member = await prisma.groupMember.findUnique({
+      where: { group_id_user_id: { group_id: id, user_id: uid } },
+    });
+
+    if (!member) throw ApiError.notFound('User is not a member of this group');
+
+    return ApiResponse.ok('Member nickname retrieved', {
+      nickname: member.nickname || null,
+    }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
