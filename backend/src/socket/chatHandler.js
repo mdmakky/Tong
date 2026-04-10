@@ -506,6 +506,39 @@ const chatHandler = (io, socket) => {
       console.error('edit_message error:', err.message);
     }
   });
+
+  // ─── SYSTEM MESSAGE (e.g., nickname changes) ────
+  socket.on('system_message', async ({ conversation_id, text }) => {
+    try {
+      if (!conversation_id || !text?.trim()) return;
+
+      const access = await resolveConversationAccess(conversation_id, null);
+      if (!access) return;
+
+      const message = await Message.create({
+        conversation_id,
+        conversation_type: access.type === 'group' ? 'group' : 'direct',
+        sender_id: userId,
+        message_type: 'system',
+        content: { text: text.trim() },
+        status: 'sent',
+      });
+
+      io.to(`conv:${conversation_id}`).emit('new_message', {
+        _id: message._id.toString(),
+        id: message._id.toString(),
+        conversation_id,
+        sender_id: userId,
+        message_type: 'system',
+        content: message.content,
+        created_at: message.created_at,
+        status: 'sent',
+      });
+    } catch (err) {
+      console.error('system_message error:', err.message);
+    }
+  });
 };
 
 export default chatHandler;
+

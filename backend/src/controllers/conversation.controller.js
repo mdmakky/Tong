@@ -719,6 +719,10 @@ export const setNickname = async (req, res, next) => {
         id,
         OR: [{ participant_1: userId }, { participant_2: userId }],
       },
+      include: {
+        user1: { select: { id: true, display_name: true } },
+        user2: { select: { id: true, display_name: true } },
+      },
     });
 
     if (!conversation) throw ApiError.notFound('Conversation not found');
@@ -727,6 +731,9 @@ export const setNickname = async (req, res, next) => {
     const otherUserId = conversation.participant_1 === userId
       ? conversation.participant_2
       : conversation.participant_1;
+
+    const currentUser = conversation.participant_1 === userId ? conversation.user1 : conversation.user2;
+    const otherUser = conversation.participant_1 === userId ? conversation.user2 : conversation.user1;
 
     // Sanitize nickname - convert null/undefined/empty string to null
     if (nickname === null || nickname === undefined || (typeof nickname === 'string' && nickname.trim() === '')) {
@@ -753,7 +760,51 @@ export const setNickname = async (req, res, next) => {
       },
     });
 
-    return ApiResponse.ok('Nickname updated', { nickname: contact.nickname }).send(res);
+    // Create system message to notify about nickname change
+    let systemMessage = null;
+    if (nickname) {
+      systemMessage = await Message.create({
+        conversation_id: id,
+        conversation_type: conversation.type || 'direct',
+        sender_id: userId,
+        message_type: 'system',
+        content: {
+          text: `${currentUser.display_name} set ${otherUser.display_name}'s nickname to "${nickname}"`,
+        },
+        status: 'sent',
+      });
+    } else {
+      systemMessage = await Message.create({
+        conversation_id: id,
+        conversation_type: conversation.type || 'direct',
+        sender_id: userId,
+        message_type: 'system',
+        content: {
+          text: `${currentUser.display_name} cleared ${otherUser.display_name}'s nickname`,
+        },
+        status: 'sent',
+      });
+    }
+
+    // Broadcast system message via socket.io
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conv:${id}`).emit('new_message', {
+        _id: systemMessage._id.toString(),
+        id: systemMessage._id.toString(),
+        conversation_id: id,
+        sender_id: userId,
+        message_type: 'system',
+        content: systemMessage.content,
+        created_at: systemMessage.created_at,
+        status: 'sent',
+      });
+    }
+
+    return ApiResponse.ok('Nickname updated', { 
+      nickname: contact.nickname,
+      systemMessage: systemMessage,
+    }).send(res);
   } catch (err) {
     next(err);
   }
