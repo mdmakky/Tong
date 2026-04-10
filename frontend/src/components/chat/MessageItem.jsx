@@ -645,19 +645,10 @@ function MessageActionsMenu({
           >
             Copy text
           </button>
-          {isOwn && onEdit && canEdit && (
+          {isOwn && onEdit && (
             <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
               className="w-full text-left flex items-center gap-2 px-3 py-2 text-sm text-[#f1f3f6] hover:bg-[#2b2f39] transition-colors"
-            >
-              <Pencil className="w-3.5 h-3.5" /> Edit
-            </button>
-          )}
-          {isOwn && onEdit && !canEdit && (
-            <button
-              disabled
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-muted opacity-50 cursor-not-allowed"
-              title="Messages cannot be edited after 24 hours"
             >
               <Pencil className="w-3.5 h-3.5" /> Edit
             </button>

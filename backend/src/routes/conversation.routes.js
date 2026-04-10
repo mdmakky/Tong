@@ -25,6 +25,10 @@ router.post(
 router.get('/:id', convCtrl.getConversation);
 router.delete('/:id', convCtrl.deleteConversation);
 
+// ─── NICKNAME ──────────────────────────────────
+router.put('/:id/nickname', convCtrl.setNickname);
+router.get('/:id/nickname', convCtrl.getNickname);
+
 // ─── FRIEND REQUESTS ───────────────────────────
 router.post('/:id/accept-request', convCtrl.acceptFriendRequest);
 router.post('/:id/decline-request', convCtrl.declineFriendRequest);
