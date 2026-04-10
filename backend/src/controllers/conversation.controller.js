@@ -860,6 +860,10 @@ export const setSelfNickname = async (req, res, next) => {
         id,
         OR: [{ participant_1: userId }, { participant_2: userId }],
       },
+      include: {
+        user1: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+        user2: { select: { id: true, username: true, display_name: true, avatar_url: true } },
+      },
     });
 
     if (!conversation) throw ApiError.notFound('Conversation not found');
@@ -868,6 +872,9 @@ export const setSelfNickname = async (req, res, next) => {
     const otherUserId = conversation.participant_1 === userId
       ? conversation.participant_2
       : conversation.participant_1;
+
+    const otherUser = conversation.participant_1 === userId ? conversation.user2 : conversation.user1;
+    const currentUser = conversation.participant_1 === userId ? conversation.user1 : conversation.user2;
 
     // Sanitize self_nickname - convert null/undefined/empty string to null
     if (self_nickname === null || self_nickname === undefined || (typeof self_nickname === 'string' && self_nickname.trim() === '')) {
@@ -893,6 +900,44 @@ export const setSelfNickname = async (req, res, next) => {
         self_nickname: self_nickname,
       },
     });
+
+    // Create system message for nickname change
+    const systemText = self_nickname
+      ? `${currentUser.display_name} set ${otherUser.display_name}'s nickname to "${self_nickname}"`
+      : `${currentUser.display_name} cleared ${otherUser.display_name}'s nickname`;
+
+    const systemMessage = new Message({
+      conversation_id: id,
+      conversation_type: 'direct',
+      sender_id: userId,
+      sender: currentUser,
+      message_type: 'system',
+      content: { text: systemText },
+      status: 'delivered',
+    });
+
+    await systemMessage.save();
+
+    // Emit socket event to notify the other user
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`conv:${id}`).emit('self_nickname_updated', {
+        conversation_id: id,
+        user_id: userId,
+        self_nickname: contact.self_nickname,
+        message: {
+          _id: systemMessage._id,
+          conversation_id: id,
+          conversation_type: 'direct',
+          sender_id: userId,
+          sender: systemMessage.sender,
+          message_type: 'system',
+          content: systemMessage.content,
+          created_at: systemMessage.created_at,
+          status: 'delivered',
+        },
+      });
+    }
 
     return ApiResponse.ok('Self nickname updated', {
       self_nickname: contact.self_nickname,

@@ -288,6 +288,22 @@ export default function useSocketEvents() {
       }
     }
 
+    const onSelfNicknameUpdated = ({ conversation_id, user_id, self_nickname, message }) => {
+      if (!conversation_id) return
+
+      // Append the system message from backend (already persisted)
+      if (message) {
+        appendMessage(conversation_id, message)
+
+        // Update conversation last message in sidebar
+        upsertConversation({
+          id: conversation_id,
+          last_message: message,
+          last_message_at: message.created_at,
+        })
+      }
+    }
+
     const onRemovedFromGroup = ({ group_id }) => {
       if (!group_id) return
       removeGroup(group_id)
@@ -317,6 +333,7 @@ export default function useSocketEvents() {
     socket.on('member_left', onMemberLeft)
     socket.on('member_role_updated', onMemberRoleUpdated)
     socket.on('member_nickname_updated', onMemberNicknameUpdated)
+    socket.on('self_nickname_updated', onSelfNicknameUpdated)
     socket.on('removed_from_group', onRemovedFromGroup)
     socket.on('group_deleted', onGroupDeleted)
 
@@ -340,6 +357,7 @@ export default function useSocketEvents() {
       socket.off('member_left', onMemberLeft)
       socket.off('member_role_updated', onMemberRoleUpdated)
       socket.off('member_nickname_updated', onMemberNicknameUpdated)
+      socket.off('self_nickname_updated', onSelfNicknameUpdated)
       socket.off('removed_from_group', onRemovedFromGroup)
       socket.off('group_deleted', onGroupDeleted)
     }
