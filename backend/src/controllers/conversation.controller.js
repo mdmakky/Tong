@@ -138,6 +138,10 @@ export const getConversations = async (req, res, next) => {
       orderBy: { updated_at: 'desc' },
     });
 
+    if (conversations.length === 0) {
+      return ApiResponse.ok('Conversations retrieved', []).send(res);
+    }
+
     const conversationIds = conversations.map((conv) => conv.id);
     const hiddenEntries = conversationIds.length > 0
       ? await ConversationVisibility.find({
@@ -152,9 +156,11 @@ export const getConversations = async (req, res, next) => {
     );
 
     // Batch-fetch friend requests (avoids N+1 across all conversations)
-    const participantIds = conversations.map((conv) =>
-      conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
-    );
+    const participantIds = [...new Set(
+      conversations.map((conv) =>
+        conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
+      )
+    )];
     const friendRequests = participantIds.length > 0
       ? await prisma.friendRequest.findMany({
         where: {
