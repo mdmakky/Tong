@@ -102,48 +102,82 @@ const presenceHandler = (io, socket) => {
       const presenceData = {};
       const requestedIds = [...new Set((user_ids || []).filter(Boolean))];
 
-      for (const uid of requestedIds) {
-        let status = null;
-        let lastSeen = null;
+      if (requestedIds.length === 0) {
+        callback?.({ presence: presenceData });
+        return;
+      }
 
-        if (redis) {
-          const data = await redis.hget('presence', uid);
-          if (data) {
-            try {
-              const parsed = JSON.parse(data);
-              const normalized = normalizeStatus(parsed.status);
-              status = normalized === 'invisible' ? 'offline' : normalized;
-              lastSeen = parsed.last_seen || null;
-            } catch (_) {
-              // Ignore malformed Redis presence value and fall back to DB/socket state.
-            }
+      const unresolvedIds = [];
+
+      if (redis) {
+        const cachedValues = await redis.hmget('presence', ...requestedIds);
+
+        requestedIds.forEach((uid, idx) => {
+          const cached = cachedValues?.[idx];
+          if (!cached) {
+            unresolvedIds.push(uid);
+            return;
           }
+
+          try {
+            const parsed = JSON.parse(cached);
+            const normalized = normalizeStatus(parsed.status);
+            presenceData[uid] = {
+              status: normalized === 'invisible' ? 'offline' : normalized,
+              last_seen: parsed.last_seen || null,
+            };
+          } catch (_) {
+            // Ignore malformed Redis presence value and fall back to DB/socket state.
+            unresolvedIds.push(uid);
+          }
+        });
+      } else {
+        unresolvedIds.push(...requestedIds);
+      }
+
+      if (unresolvedIds.length > 0) {
+        const users = await prisma.user.findMany({
+          where: { id: { in: unresolvedIds } },
+          select: { id: true, online_status: true, last_seen: true },
+        });
+        const userMap = new Map(users.map((u) => [u.id, u]));
+
+        // Bound concurrency for live traffic while still avoiding serial lookups.
+        const socketCountMap = new Map();
+        const SOCKET_BATCH_SIZE = 25;
+        for (let i = 0; i < unresolvedIds.length; i += SOCKET_BATCH_SIZE) {
+          const batch = unresolvedIds.slice(i, i + SOCKET_BATCH_SIZE);
+          const batchCounts = await Promise.all(
+            batch.map(async (uid) => {
+              try {
+                const activeSockets = await io.in(`user:${uid}`).fetchSockets();
+                return [uid, activeSockets.length];
+              } catch (_) {
+                return [uid, 0];
+              }
+            })
+          );
+
+          batchCounts.forEach(([uid, count]) => {
+            socketCountMap.set(uid, count);
+          });
         }
 
-        if (!status) {
-          const [activeSockets, user] = await Promise.all([
-            io.in(`user:${uid}`).fetchSockets(),
-            prisma.user.findUnique({
-              where: { id: uid },
-              select: { online_status: true, last_seen: true },
-            }),
-          ]);
-
-          if (!user) continue;
+        unresolvedIds.forEach((uid) => {
+          const user = userMap.get(uid);
+          if (!user) return;
 
           const normalized = normalizeStatus(user.online_status);
-          if (activeSockets.length === 0) {
-            status = 'offline';
-          } else {
-            status = normalized === 'invisible' ? 'offline' : normalized;
-          }
-          lastSeen = user.last_seen;
-        }
+          const activeSocketCount = socketCountMap.get(uid) || 0;
+          const resolvedStatus = activeSocketCount === 0
+            ? 'offline'
+            : (normalized === 'invisible' ? 'offline' : normalized);
 
-        presenceData[uid] = {
-          status: status || 'offline',
-          last_seen: lastSeen || null,
-        };
+          presenceData[uid] = {
+            status: resolvedStatus,
+            last_seen: user.last_seen || null,
+          };
+        });
       }
 
       callback?.({ presence: presenceData });

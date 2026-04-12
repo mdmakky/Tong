@@ -261,7 +261,7 @@ export default function ChatWindow() {
               <MessageItem
                 key={item.key}
                 message={item.data}
-                previousMessage={grouped[grouped.indexOf(item) - 1]?.data}
+                previousMessage={index > 0 ? grouped[index - 1]?.data : null}
                 isOwn={item.data.sender_id === user?.id}
                 conversationId={convId}
                 isLastReadMessage={msgId === lastReadOwnMsgId}
