@@ -29,6 +29,67 @@ const clearHiddenConversationForUsers = async (conversationId, userIds = []) => 
   });
 };
 
+const toConversationKey = (id) => String(id);
+
+const buildCountMap = (rows = []) => new Map(
+  rows.map((row) => [toConversationKey(row._id), row.count || 0])
+);
+
+const getLastMessagesByConversationId = async (conversationIds, userId) => {
+  if (!conversationIds?.length) return new Map();
+
+  const rows = await Message.aggregate([
+    {
+      $match: {
+        conversation_id: { $in: conversationIds },
+        is_deleted: false,
+        deleted_for_all: false,
+        deleted_for: { $ne: userId },
+      },
+    },
+    { $sort: { conversation_id: 1, created_at: -1 } },
+    {
+      $group: {
+        _id: '$conversation_id',
+        message: {
+          $first: {
+            content: '$content',
+            message_type: '$message_type',
+            sender_id: '$sender_id',
+            created_at: '$created_at',
+            read_receipts: '$read_receipts',
+            delivered_to: '$delivered_to',
+          },
+        },
+      },
+    },
+  ]);
+
+  return new Map(rows.map((row) => [toConversationKey(row._id), row.message]));
+};
+
+const getTotalVisibleMessageCountsByConversationId = async (conversationIds) => {
+  if (!conversationIds?.length) return new Map();
+
+  const rows = await Message.aggregate([
+    {
+      $match: {
+        conversation_id: { $in: conversationIds },
+        is_deleted: false,
+        deleted_for_all: false,
+      },
+    },
+    {
+      $group: {
+        _id: '$conversation_id',
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return buildCountMap(rows);
+};
+
 // ─── GET ALL CONVERSATIONS ─────────────────────
 export const getConversations = async (req, res, next) => {
   try {
@@ -86,6 +147,11 @@ export const getConversations = async (req, res, next) => {
       reqMap[otherId] = req;
     }
 
+    const [lastMessageMap, totalVisibleMessageCountMap] = await Promise.all([
+      getLastMessagesByConversationId(conversationIds, userId),
+      getTotalVisibleMessageCountsByConversationId(conversationIds),
+    ]);
+
     // Enrich with last message from MongoDB
     const enriched = await Promise.all(
       conversations.map(async (conv) => {
@@ -96,22 +162,16 @@ export const getConversations = async (req, res, next) => {
           deleted_for_all: false,
         };
 
-        const [lastMessage, unreadCount, totalVisibleMessages] = await Promise.all([
-          Message.findOne({
-            ...baseMessageQuery,
-            deleted_for: { $ne: userId },
-          })
-            .sort({ created_at: -1 })
-            .select('content message_type sender_id created_at read_receipts delivered_to')
-            .lean(),
-          Message.countDocuments({
+        const conversationKey = toConversationKey(conv.id);
+        const lastMessage = lastMessageMap.get(conversationKey) || null;
+        const totalVisibleMessages = totalVisibleMessageCountMap.get(conversationKey) || 0;
+
+        const unreadCount = await Message.countDocuments({
             ...baseMessageQuery,
             sender_id: { $ne: userId },
             'read_receipts.user_id': { $ne: userId },
             deleted_for: { $ne: userId },
-          }),
-          Message.countDocuments(baseMessageQuery),
-        ]);
+          });
 
         const friendReq = reqMap[otherUser?.id];
 
