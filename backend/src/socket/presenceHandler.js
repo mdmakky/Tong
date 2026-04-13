@@ -14,6 +14,20 @@ const resolveConnectStatus = (status) => {
   return normalized === 'offline' ? 'online' : normalized;
 };
 
+const hmgetPresence = async (redis, userIds = []) => {
+  if (!redis || userIds.length === 0) return [];
+
+  if (typeof redis.hmget === 'function') {
+    return redis.hmget('presence', ...userIds);
+  }
+
+  if (typeof redis.hMGet === 'function') {
+    return redis.hMGet('presence', userIds);
+  }
+
+  return [];
+};
+
 /**
  * Presence (online status) handler
  * Tracks online/offline/away/busy/invisible status via Redis and Socket.io
@@ -110,7 +124,7 @@ const presenceHandler = (io, socket) => {
       const unresolvedIds = [];
 
       if (redis) {
-        const cachedValues = await redis.hmget('presence', ...requestedIds);
+        const cachedValues = await hmgetPresence(redis, requestedIds);
 
         requestedIds.forEach((uid, idx) => {
           const cached = cachedValues?.[idx];
@@ -136,19 +150,13 @@ const presenceHandler = (io, socket) => {
       }
 
       if (unresolvedIds.length > 0) {
-        const users = await prisma.user.findMany({
-          where: { id: { in: unresolvedIds } },
-          select: { id: true, online_status: true, last_seen: true },
-        });
-        const userMap = new Map(users.map((u) => [u.id, u]));
-
-        // Bound concurrency for live traffic while still avoiding serial lookups.
-        const socketCountMap = new Map();
-        const SOCKET_BATCH_SIZE = 25;
-        for (let i = 0; i < unresolvedIds.length; i += SOCKET_BATCH_SIZE) {
-          const batch = unresolvedIds.slice(i, i + SOCKET_BATCH_SIZE);
-          const batchCounts = await Promise.all(
-            batch.map(async (uid) => {
+        const [users, socketCounts] = await Promise.all([
+          prisma.user.findMany({
+            where: { id: { in: unresolvedIds } },
+            select: { id: true, online_status: true, last_seen: true },
+          }),
+          Promise.all(
+            unresolvedIds.map(async (uid) => {
               try {
                 const activeSockets = await io.in(`user:${uid}`).fetchSockets();
                 return [uid, activeSockets.length];
@@ -156,12 +164,11 @@ const presenceHandler = (io, socket) => {
                 return [uid, 0];
               }
             })
-          );
+          ),
+        ]);
 
-          batchCounts.forEach(([uid, count]) => {
-            socketCountMap.set(uid, count);
-          });
-        }
+        const userMap = new Map(users.map((u) => [u.id, u]));
+        const socketCountMap = new Map(socketCounts);
 
         unresolvedIds.forEach((uid) => {
           const user = userMap.get(uid);

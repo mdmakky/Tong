@@ -44,6 +44,67 @@ const parseStringArray = (value) => {
   return [];
 };
 
+const toGroupKey = (id) => String(id);
+
+const getLastMessagesByGroupId = async (groupIds = []) => {
+  if (groupIds.length === 0) return new Map();
+
+  const rows = await Message.aggregate([
+    {
+      $match: {
+        conversation_id: { $in: groupIds },
+        conversation_type: 'group',
+        is_deleted: false,
+        deleted_for_all: false,
+      },
+    },
+    { $sort: { conversation_id: 1, created_at: -1 } },
+    {
+      $group: {
+        _id: '$conversation_id',
+        message: {
+          $first: {
+            content: '$content',
+            message_type: '$message_type',
+            sender_id: '$sender_id',
+            created_at: '$created_at',
+          },
+        },
+      },
+    },
+  ]);
+
+  return new Map(rows.map((row) => [toGroupKey(row._id), row.message]));
+};
+
+const getUnreadCountsByGroupId = async (memberships = [], userId) => {
+  const groupsWithLastRead = memberships.filter((membership) => Boolean(membership.last_read_at));
+  if (groupsWithLastRead.length === 0) return new Map();
+
+  const perGroupThresholdMatch = groupsWithLastRead.map((membership) => ({
+    conversation_id: membership.group_id,
+    created_at: { $gt: membership.last_read_at },
+  }));
+
+  const rows = await Message.aggregate([
+    {
+      $match: {
+        conversation_type: 'group',
+        sender_id: { $ne: userId },
+        $or: perGroupThresholdMatch,
+      },
+    },
+    {
+      $group: {
+        _id: '$conversation_id',
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return new Map(rows.map((row) => [toGroupKey(row._id), row.count || 0]));
+};
+
 const emitToGroupRoom = (req, groupId, event, payload) => {
   const io = req.app.get('io');
   if (io) io.to(`conv:${groupId}`).emit(event, payload);
@@ -86,37 +147,24 @@ export const getGroups = async (req, res, next) => {
       orderBy: { joined_at: 'desc' },
     });
 
-    const groups = await Promise.all(
-      memberships.map(async (m) => {
-        const lastMessage = await Message.findOne({
-          conversation_id: m.group_id,
-          conversation_type: 'group',
-          is_deleted: false,
-          deleted_for_all: false,
-        })
-          .sort({ created_at: -1 })
-          .select('content message_type sender_id created_at')
-          .lean();
+    const groupIds = memberships.map((membership) => membership.group_id);
+    const [lastMessageByGroupId, unreadCountByGroupId] = await Promise.all([
+      getLastMessagesByGroupId(groupIds),
+      getUnreadCountsByGroupId(memberships, req.user.id),
+    ]);
 
-        const unreadCount = m.last_read_at
-          ? await Message.countDocuments({
-            conversation_id: m.group_id,
-            conversation_type: 'group',
-            created_at: { $gt: m.last_read_at },
-            sender_id: { $ne: req.user.id },
-          })
-          : 0;
+    const groups = memberships.map((membership) => {
+      const groupKey = toGroupKey(membership.group_id);
 
-        return {
-          ...m.group,
-          my_role: m.role,
-          nickname: m.nickname,
-          muted_until: m.muted_until,
-          last_message: lastMessage,
-          unread_count: unreadCount,
-        };
-      })
-    );
+      return {
+        ...membership.group,
+        my_role: membership.role,
+        nickname: membership.nickname,
+        muted_until: membership.muted_until,
+        last_message: lastMessageByGroupId.get(groupKey) || null,
+        unread_count: unreadCountByGroupId.get(groupKey) || 0,
+      };
+    });
 
     return ApiResponse.ok('Groups retrieved', groups).send(res);
   } catch (err) {
