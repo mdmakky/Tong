@@ -76,7 +76,7 @@ export default function ChatLayout() {
   }, [socket, user?.id, convsData, updatePresence])
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-bg-primary">
+    <div className="flex h-dvh w-screen overflow-hidden bg-bg-primary">
       {/* Left sidebar — full-width on mobile, 360px on desktop */}
       <div
         className={clsx(

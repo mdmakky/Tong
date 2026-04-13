@@ -323,7 +323,7 @@ export default function MessageInput({ conversationId, conversationType }) {
   const formatRecTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
   return (
-    <div className="border-t border-border bg-bg-primary px-4 py-3">
+    <div className="border-t border-border bg-bg-primary px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:pb-3">
       {/* Drag overlay */}
       <div {...getRootProps()} className="relative">
         <input {...getInputProps()} />
@@ -418,7 +418,7 @@ export default function MessageInput({ conversationId, conversationType }) {
                 onKeyDown={handleKeyDown}
                 placeholder="Write a message..."
                 rows={1}
-                className="flex-1 bg-transparent text-text-primary text-sm placeholder:text-text-muted resize-none focus:outline-none leading-relaxed max-h-40"
+                className="flex-1 bg-transparent text-text-primary text-[16px] md:text-sm placeholder:text-text-muted resize-none focus:outline-none leading-relaxed max-h-40"
                 style={{ height: 'auto', minHeight: '24px' }}
               />
               {/* Emoji button */}

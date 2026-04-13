@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Phone, Video, Search, MoreVertical, ChevronRight, ArrowLeft, Pin } from 'lucide-react'
 import useChatStore from '@/store/chatStore'
 import useAuthStore from '@/store/authStore'
@@ -5,6 +6,8 @@ import Avatar from '@/components/ui/Avatar'
 import { formatLastSeen, resolvePresenceStatus } from '@/utils/helpers'
 
 export default function ChatHeader() {
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
+  const mobileMenuRef = useRef(null)
   const { activeConversation, activeType, presenceMap, typingUsers, toggleInfoPanel, showInfoPanel, setActiveConversation, pinnedConversations, pinnedGroups, togglePinConversation, togglePinGroup, nicknames } = useChatStore()
   const { user } = useAuthStore()
 
@@ -49,12 +52,43 @@ export default function ChatHeader() {
     }
   }
 
+  useEffect(() => {
+    if (!mobileActionsOpen) return
+
+    const handlePointerDown = (event) => {
+      if (!mobileMenuRef.current) return
+      if (!mobileMenuRef.current.contains(event.target)) {
+        setMobileActionsOpen(false)
+      }
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setMobileActionsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [mobileActionsOpen])
+
+  useEffect(() => {
+    setMobileActionsOpen(false)
+  }, [convId])
+
   return (
-    <div className="flex items-center gap-3 px-4 md:px-6 py-4 border-b border-border bg-bg-primary">
+    <div className="chat-header-mobile-compact flex items-center gap-2 md:gap-3 px-3 md:px-6 py-3 md:py-4 border-b border-border bg-bg-primary">
       {/* Back button (mobile only) */}
       <button
         onClick={() => setActiveConversation(null)}
-        className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
+        className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-hover transition-colors flex-shrink-0"
         title="Back"
       >
         <ArrowLeft className="w-5 h-5" />
@@ -65,21 +99,21 @@ export default function ChatHeader() {
         <Avatar src={avatarUrl} name={displayName} size="md" status={!isGroup ? status : undefined} />
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-text-primary truncate">{displayName}</h2>
-          <p className={`text-xs truncate ${subtitle === 'typing...' ? 'text-accent-yellow' : 'text-text-secondary'}`}>
+          <p className={`chat-header-subtitle text-xs truncate ${subtitle === 'typing...' ? 'text-accent-yellow' : 'text-text-secondary'}`}>
             {subtitle}
           </p>
         </div>
       </button>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-1">
-        <button className="icon-btn" title="Voice call">
+      <div className="flex items-center gap-0.5 md:gap-1">
+        <button className="icon-btn chat-header-secondary-action" title="Voice call">
           <Phone className="w-5 h-5" />
         </button>
-        <button className="icon-btn" title="Video call">
+        <button className="icon-btn chat-header-secondary-action" title="Video call">
           <Video className="w-5 h-5" />
         </button>
-        <button className="icon-btn" title="Search in conversation">
+        <button className="icon-btn chat-header-secondary-action" title="Search in conversation">
           <Search className="w-5 h-5" />
         </button>
         <button
@@ -95,6 +129,48 @@ export default function ChatHeader() {
         >
           <Pin className="w-5 h-5" />
         </button>
+
+        <div ref={mobileMenuRef} className="relative md:hidden">
+          <button
+            onClick={() => setMobileActionsOpen((prev) => !prev)}
+            className="icon-btn chat-header-more-trigger"
+            title="More actions"
+            aria-haspopup="menu"
+            aria-expanded={mobileActionsOpen}
+          >
+            <MoreVertical className="w-5 h-5" />
+          </button>
+
+          {mobileActionsOpen && (
+            <div className="chat-header-mobile-menu absolute right-0 top-[calc(100%+0.4rem)] z-[70] min-w-[170px] rounded-xl border border-border bg-bg-secondary shadow-2xl p-1.5">
+              <button
+                type="button"
+                onClick={() => setMobileActionsOpen(false)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-text-primary hover:bg-surface-hover transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                <span>Voice call</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileActionsOpen(false)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-text-primary hover:bg-surface-hover transition-colors"
+              >
+                <Video className="w-4 h-4" />
+                <span>Video call</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileActionsOpen(false)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-text-primary hover:bg-surface-hover transition-colors"
+              >
+                <Search className="w-4 h-4" />
+                <span>Search messages</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={toggleInfoPanel}
           className={`icon-btn ${showInfoPanel ? 'text-accent-yellow bg-surface-active' : ''}`}
