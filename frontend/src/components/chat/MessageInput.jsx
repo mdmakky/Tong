@@ -27,6 +27,7 @@ export default function MessageInput({ conversationId, conversationType }) {
   const typingTimerRef = useRef(null)
   const recordingIntervalRef = useRef(null)
   const recordingTimeRef = useRef(0)
+  const emojiPanelRef = useRef(null)
 
   const { replyTo, clearReplyTo, appendMessage, replaceMessage, removeMessage, upsertConversation, upsertGroup, activeConversation, activeType } = useChatStore()
   const { user } = useAuthStore()
@@ -64,6 +65,34 @@ export default function MessageInput({ conversationId, conversationType }) {
     recordingTimeRef.current = recordingTime
   }, [recordingTime])
 
+  // Close emoji picker on outside click or Escape for predictable dismissal behavior.
+  useEffect(() => {
+    if (!showEmoji) return
+
+    const handlePointerDown = (event) => {
+      if (!emojiPanelRef.current) return
+      if (!emojiPanelRef.current.contains(event.target)) {
+        setShowEmoji(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowEmoji(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('touchstart', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('touchstart', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [showEmoji])
+
   // Typing events
   const emitTyping = useCallback(() => {
     if (!socket || !conversationId) return
@@ -94,6 +123,7 @@ export default function MessageInput({ conversationId, conversationType }) {
     if (sending) return
 
     setSending(true)
+    setShowEmoji(false)
     socket?.emit('typing_stop', { conversation_id: conversationId })
 
     // Clear input immediately for snappy UX
@@ -392,7 +422,7 @@ export default function MessageInput({ conversationId, conversationType }) {
                 style={{ height: 'auto', minHeight: '24px' }}
               />
               {/* Emoji button */}
-              <div className="relative ml-2 flex-shrink-0">
+              <div ref={emojiPanelRef} className="relative ml-2 flex-shrink-0">
                 <button
                   onClick={() => setShowEmoji(!showEmoji)}
                   className="text-text-muted hover:text-text-secondary transition-colors"
@@ -412,7 +442,6 @@ export default function MessageInput({ conversationId, conversationType }) {
                       <EmojiPicker
                         onEmojiClick={(e) => {
                           setText((prev) => prev + e.emoji)
-                          setShowEmoji(false)
                           textareaRef.current?.focus()
                         }}
                         theme="dark"
