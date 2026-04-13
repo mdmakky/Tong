@@ -256,12 +256,16 @@ export default function ChatWindow() {
             if (item.type === 'separator') {
               return <DateSeparator key={item.key} date={item.date} />
             }
+
+            const previousItem = index > 0 ? grouped[index - 1] : null
+            const previousMessage = previousItem?.type === 'message' ? previousItem.data : null
             const msgId = item.data._id || item.data.id
+
             return (
               <MessageItem
                 key={item.key}
                 message={item.data}
-                previousMessage={index > 0 ? grouped[index - 1]?.data : null}
+                previousMessage={previousMessage}
                 isOwn={item.data.sender_id === user?.id}
                 conversationId={convId}
                 isLastReadMessage={msgId === lastReadOwnMsgId}

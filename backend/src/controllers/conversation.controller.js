@@ -787,6 +787,75 @@ export const searchMessages = async (req, res, next) => {
   }
 };
 
+// ─── GET NICKNAMES (BULK) ──────────────────────
+export const getNicknamesBulk = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const inputIds = Array.isArray(req.body?.conversation_ids)
+      ? req.body.conversation_ids
+      : [];
+    const conversationIds = [...new Set(inputIds.filter(Boolean))];
+
+    if (conversationIds.length === 0) {
+      return ApiResponse.ok('Nicknames retrieved', { nicknames: {} }).send(res);
+    }
+
+    const conversations = await prisma.conversation.findMany({
+      where: {
+        id: { in: conversationIds },
+        OR: [
+          { participant_1: userId },
+          { participant_2: userId },
+        ],
+      },
+      select: {
+        id: true,
+        participant_1: true,
+        participant_2: true,
+      },
+    });
+
+    if (conversations.length === 0) {
+      return ApiResponse.ok('Nicknames retrieved', { nicknames: {} }).send(res);
+    }
+
+    const otherUserIds = [...new Set(
+      conversations.map((conv) =>
+        conv.participant_1 === userId ? conv.participant_2 : conv.participant_1
+      )
+    )];
+
+    const contacts = otherUserIds.length > 0
+      ? await prisma.contact.findMany({
+        where: {
+          owner_id: userId,
+          contact_id: { in: otherUserIds },
+        },
+        select: {
+          contact_id: true,
+          nickname: true,
+        },
+      })
+      : [];
+
+    const nicknameByContactId = new Map(
+      contacts.map((contact) => [contact.contact_id, contact.nickname])
+    );
+
+    const nicknames = {};
+    for (const conversation of conversations) {
+      const otherUserId = conversation.participant_1 === userId
+        ? conversation.participant_2
+        : conversation.participant_1;
+      nicknames[conversation.id] = nicknameByContactId.get(otherUserId) || null;
+    }
+
+    return ApiResponse.ok('Nicknames retrieved', { nicknames }).send(res);
+  } catch (err) {
+    next(err);
+  }
+};
+
 // ─── SET/UPDATE NICKNAME ───────────────────────
 export const setNickname = async (req, res, next) => {
   try {

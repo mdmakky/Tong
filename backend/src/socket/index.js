@@ -70,47 +70,47 @@ const initializeSocket = (io) => {
     // and notify each sender in real-time.
     try {
       const myUserId = socket.user.id;
-      const undelivered = await Message.find({
-        conversation_type: { $in: ['direct'] },
-        sender_id: { $ne: myUserId },
-        delivered_to: { $ne: myUserId },
-        is_deleted: false,
-        deleted_for_all: false,
-      })
-        .select('_id conversation_id sender_id')
-        .lean();
-
-      // Filter to only conversations this user is part of
-      const myConvIds = new Set((await prisma.conversation.findMany({
+      const myConvIds = (await prisma.conversation.findMany({
         where: { OR: [{ participant_1: myUserId }, { participant_2: myUserId }] },
         select: { id: true },
-      })).map((c) => c.id));
+      })).map((c) => c.id);
 
-      const relevant = undelivered.filter((m) => myConvIds.has(m.conversation_id));
+      if (myConvIds.length > 0) {
+        const relevant = await Message.find({
+          conversation_type: { $in: ['direct'] },
+          conversation_id: { $in: myConvIds },
+          sender_id: { $ne: myUserId },
+          delivered_to: { $ne: myUserId },
+          is_deleted: false,
+          deleted_for_all: false,
+        })
+          .select('_id conversation_id sender_id')
+          .lean();
 
-      if (relevant.length > 0) {
-        const msgIds = relevant.map((m) => m._id);
-        await Message.updateMany(
-          { _id: { $in: msgIds } },
-          { $addToSet: { delivered_to: myUserId } }
-        );
+        if (relevant.length > 0) {
+          const msgIds = relevant.map((m) => m._id);
+          await Message.updateMany(
+            { _id: { $in: msgIds } },
+            { $addToSet: { delivered_to: myUserId } }
+          );
 
-        // Group by sender and notify each sender
-        const bySender = {};
-        for (const m of relevant) {
-          if (!bySender[m.sender_id]) bySender[m.sender_id] = [];
-          bySender[m.sender_id].push({
-            message_id: m._id.toString(),
-            conversation_id: m.conversation_id,
-          });
-        }
-
-        for (const [senderId, msgs] of Object.entries(bySender)) {
-          for (const { message_id, conversation_id } of msgs) {
-            io.to(`user:${senderId}`).emit('message_delivered', {
-              message_id,
-              conversation_id,
+          // Group by sender and notify each sender
+          const bySender = {};
+          for (const m of relevant) {
+            if (!bySender[m.sender_id]) bySender[m.sender_id] = [];
+            bySender[m.sender_id].push({
+              message_id: m._id.toString(),
+              conversation_id: m.conversation_id,
             });
+          }
+
+          for (const [senderId, msgs] of Object.entries(bySender)) {
+            for (const { message_id, conversation_id } of msgs) {
+              io.to(`user:${senderId}`).emit('message_delivered', {
+                message_id,
+                conversation_id,
+              });
+            }
           }
         }
       }
@@ -124,32 +124,8 @@ const initializeSocket = (io) => {
     groupHandler(io, socket);
 
     // ─── Disconnect ───
-    socket.on('disconnect', async (reason) => {
+    socket.on('disconnect', (reason) => {
       console.log(`🔌 User disconnected: ${socket.user.display_name} — ${reason}`);
-
-      // Update last_seen
-      try {
-        const remainingSockets = (await io.in(`user:${socket.user.id}`).fetchSockets())
-          .filter((s) => s.id !== socket.id);
-
-        // User still has another active connection (e.g., another tab)
-        if (remainingSockets.length > 0) return;
-
-        const now = new Date();
-        await prisma.user.update({
-          where: { id: socket.user.id },
-          data: { online_status: 'offline', last_seen: now },
-        });
-
-        // Broadcast offline status
-        socket.broadcast.emit('presence_update', {
-          user_id: socket.user.id,
-          status: 'offline',
-          last_seen: now,
-        });
-      } catch (err) {
-        console.error('Disconnect update error:', err.message);
-      }
     });
 
     // ─── Error ───

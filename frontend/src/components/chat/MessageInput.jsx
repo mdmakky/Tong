@@ -1,8 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
 import {
   Send, Paperclip, Smile, X, Mic, Square, Image as ImageIcon
 } from 'lucide-react'
-import EmojiPicker from 'emoji-picker-react'
 import { useDropzone } from 'react-dropzone'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
@@ -12,6 +11,7 @@ import { conversationApi, groupApi } from '@/lib/apiServices'
 import Avatar from '@/components/ui/Avatar'
 
 const MAX_TEXT_LENGTH = 4000
+const EmojiPicker = lazy(() => import('emoji-picker-react'))
 
 export default function MessageInput({ conversationId, conversationType }) {
   const [text, setText] = useState('')
@@ -402,19 +402,27 @@ export default function MessageInput({ conversationId, conversationType }) {
                 </button>
                 {showEmoji && (
                   <div className="absolute bottom-10 right-0 z-50">
-                    <EmojiPicker
-                      onEmojiClick={(e) => {
-                        setText((prev) => prev + e.emoji)
-                        setShowEmoji(false)
-                        textareaRef.current?.focus()
-                      }}
-                      theme="dark"
-                      width={320}
-                      height={380}
-                      searchDisabled={false}
-                      skinTonesDisabled
-                      previewConfig={{ showPreview: false }}
-                    />
+                    <Suspense
+                      fallback={
+                        <div className="w-80 h-96 bg-bg-elevated border border-border rounded-2xl flex items-center justify-center text-xs text-text-muted">
+                          Loading emojis...
+                        </div>
+                      }
+                    >
+                      <EmojiPicker
+                        onEmojiClick={(e) => {
+                          setText((prev) => prev + e.emoji)
+                          setShowEmoji(false)
+                          textareaRef.current?.focus()
+                        }}
+                        theme="dark"
+                        width={320}
+                        height={380}
+                        searchDisabled={false}
+                        skinTonesDisabled
+                        previewConfig={{ showPreview: false }}
+                      />
+                    </Suspense>
                   </div>
                 )}
               </div>

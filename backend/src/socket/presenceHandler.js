@@ -197,19 +197,30 @@ const presenceHandler = (io, socket) => {
   // ─── Cleanup on Disconnect ───
   socket.on('disconnect', async () => {
     try {
+      const sockets = await io.in(`user:${userId}`).fetchSockets();
+      if (sockets.length > 0) return;
+
+      const now = new Date();
       const redis = getRedis();
       if (redis) {
-        // Check if user has other active sockets
-        const sockets = await io.in(`user:${userId}`).fetchSockets();
-        if (sockets.length === 0) {
-          // Last socket — set offline
-          await redis.hset('presence', userId, JSON.stringify({
-            status: 'offline',
-            socket_id: null,
-            last_seen: new Date().toISOString(),
-          }));
-        }
+        await redis.hset('presence', userId, JSON.stringify({
+          status: 'offline',
+          socket_id: null,
+          last_seen: now.toISOString(),
+        }));
       }
+
+      // Preserve user-selected profile status; only update last_seen timestamp.
+      await prisma.user.update({
+        where: { id: userId },
+        data: { last_seen: now },
+      });
+
+      socket.broadcast.emit('presence_update', {
+        user_id: userId,
+        status: 'offline',
+        last_seen: now,
+      });
     } catch (err) {
       console.error('presence disconnect error:', err.message);
     }

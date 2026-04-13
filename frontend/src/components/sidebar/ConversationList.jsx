@@ -22,34 +22,44 @@ export default function ConversationList() {
     pinnedConversations,
     nicknames,
     setNicknames,
+    setNickname,
   } = useChatStore()
   const { user } = useAuthStore()
+  const conversationIdSignature = conversations
+    .map((conv) => conv.id)
+    .filter(Boolean)
+    .sort()
+    .join('|')
 
   // Load all nicknames when conversations change
   useEffect(() => {
+    let cancelled = false
+
     const loadNicknames = async () => {
       try {
-        const nicknameMap = {}
-        for (const conv of conversations) {
-          try {
-            const { data } = await conversationApi.getNickname(conv.id)
-            const nickname = data?.data?.nickname
-            if (nickname) {
-              nicknameMap[conv.id] = nickname
-            }
-          } catch (_) {
-            // Silently fail for each one
-          }
+        const conversationIds = conversations
+          .map((conv) => conv.id)
+          .filter(Boolean)
+
+        if (conversationIds.length === 0) {
+          setNicknames({})
+          return
         }
-        setNicknames(nicknameMap)
+
+        const { data } = await conversationApi.getNicknamesBulk(conversationIds)
+        if (cancelled) return
+        setNicknames(data?.data?.nicknames || {})
       } catch (_) {
         // Error loading nicknames
       }
     }
-    if (conversations.length > 0) {
-      loadNicknames()
+
+    loadNicknames()
+
+    return () => {
+      cancelled = true
     }
-  }, [conversations.length, setNicknames])
+  }, [conversationIdSignature, setNicknames])
 
   // Reload the active conversation's nickname to get fresh data from the InfoPanel
   useEffect(() => {
@@ -58,16 +68,13 @@ export default function ConversationList() {
       try {
         const { data } = await conversationApi.getNickname(activeConversation.id)
         const nickname = data?.data?.nickname
-        setNicknames({
-          ...nicknames,
-          [activeConversation.id]: nickname || undefined,
-        })
+        setNickname(activeConversation.id, nickname || null)
       } catch (_) {
         // Silently fail
       }
     }
     loadActiveNickname()
-  }, [activeConversation?.id, setNicknames])
+  }, [activeConversation?.id, setNickname])
 
   const filtered = conversations
     .filter((conv) => {

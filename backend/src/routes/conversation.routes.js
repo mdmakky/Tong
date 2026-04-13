@@ -26,6 +26,15 @@ router.get('/:id', convCtrl.getConversation);
 router.delete('/:id', convCtrl.deleteConversation);
 
 // ─── NICKNAME ──────────────────────────────────
+router.post(
+  '/nicknames/bulk',
+  [
+    body('conversation_ids').isArray({ min: 1 }).withMessage('conversation_ids must be a non-empty array'),
+    body('conversation_ids.*').isUUID().withMessage('Valid conversation ID required'),
+  ],
+  validate,
+  convCtrl.getNicknamesBulk
+);
 router.put('/:id/nickname', convCtrl.setNickname);
 router.get('/:id/nickname', convCtrl.getNickname);
 router.put('/:id/self-nickname', convCtrl.setSelfNickname);

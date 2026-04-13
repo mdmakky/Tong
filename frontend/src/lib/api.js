@@ -1,4 +1,5 @@
 import axios from 'axios'
+import useAuthStore from '@/store/authStore'
 
 const backendUrl = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '')
 const apiBaseUrl = backendUrl ? `${backendUrl}/api` : '/api'
@@ -9,12 +10,8 @@ const api = axios.create({
   timeout: 15000,
 })
 
-// Lazy-load authStore to avoid circular dependency
 const forceLogout = () => {
-  // Import dynamically so we don't create circular imports
-  import('@/store/authStore').then(({ default: useAuthStore }) => {
-    useAuthStore.getState().logout()
-  })
+  useAuthStore.getState().logout()
 }
 
 // ─── Request Interceptor: attach access token ─────────────────────────────
