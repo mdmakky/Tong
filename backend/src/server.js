@@ -4,6 +4,7 @@ import app from './app.js';
 import env from './config/env.js';
 import { connectAllDatabases, disconnectAll } from './config/database.js';
 import initializeSocket from './socket/index.js';
+import { startSupabaseKeepAlive } from './services/supabaseKeepAlive.service.js';
 
 // ─── Create HTTP Server ────────────────────────
 const server = http.createServer(app);
@@ -23,6 +24,8 @@ const io = new SocketIO(server, {
 // Attach io to app for access in routes if needed
 app.set('io', io);
 
+let stopSupabaseKeepAlive = () => {};
+
 // Initialize socket handlers
 initializeSocket(io);
 
@@ -31,6 +34,9 @@ const startServer = async () => {
   try {
     // Connect all databases
     await connectAllDatabases();
+
+    // Run a daily lightweight query to prevent Supabase inactivity pausing.
+    stopSupabaseKeepAlive = startSupabaseKeepAlive();
 
     // Start listening
     server.listen(env.PORT, () => {
@@ -55,6 +61,8 @@ const startServer = async () => {
 // ─── Graceful Shutdown ─────────────────────────
 const shutdown = async (signal) => {
   console.log(`\n🛑 ${signal} received. Shutting down gracefully...`);
+
+  stopSupabaseKeepAlive();
 
   // Close Socket.io
   io.close();

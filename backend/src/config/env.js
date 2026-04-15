@@ -24,6 +24,8 @@ const env = {
     .map((server) => server.trim())
     .filter(Boolean),
   REDIS_URL: process.env.REDIS_URL,
+  SUPABASE_KEEPALIVE_ENABLED: process.env.SUPABASE_KEEPALIVE_ENABLED,
+  SUPABASE_KEEPALIVE_INTERVAL_HOURS: process.env.SUPABASE_KEEPALIVE_INTERVAL_HOURS,
 
   // Brevo (transactional email)
   BREVO_API_KEY: process.env.BREVO_API_KEY,
